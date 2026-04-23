@@ -2734,6 +2734,7 @@
   let viewingPhaseIdx = null;
   let editingPhaseIdx = null;
   let editingNewPhase = false;
+  let lastSyncTime = null;
   let syncInProgress = false;
 
   // ===== カレンダー機能 =====
@@ -3001,6 +3002,7 @@
       // ここでフラグ立てる必要なし
       await docRef.set(payload, { merge: false });
       firestoreLastSaved = JSON.stringify({ channels, calendarEvents, iconTypes, memoPages });
+      lastSyncTime = new Date();
       setSyncStatus('synced', '同期済み ✓');
       return true;
     } catch (err) {
