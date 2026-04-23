@@ -2923,7 +2923,6 @@
   let firestoreUnsubscribe = null; // リアルタイムリスナー解除用
   let firestoreInProgress = false; // 保存中フラグ
   let firestoreLastSaved = null; // 最後に保存した内容のJSON（自分のpushでの再反映防止）
-  let firestoreIgnoreNextSnapshot = false; // 自分が書き込んだ直後のsnapshotは無視
   
   // Firestoreからデータ読み込み（初回のみ）
   async function fetchFromFirestore() {
@@ -2998,8 +2997,8 @@
         _updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       };
       const docRef = firestoreDb.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC_ID);
-      // 自分の書き込み直後のsnapshotは無視する
-      firestoreIgnoreNextSnapshot = true;
+      // 自分の書き込みはリスナー側で hasPendingWrites と firestoreLastSaved で判別するので
+      // ここでフラグ立てる必要なし
       await docRef.set(payload, { merge: false });
       firestoreLastSaved = JSON.stringify({ channels, calendarEvents, iconTypes, memoPages });
       setSyncStatus('synced', '同期済み ✓');
@@ -3020,12 +3019,22 @@
   
   // リアルタイムリスナーを開始
   function startFirestoreListener() {
-    if (!window.firestoreDb) return;
+    if (!window.firestoreDb) {
+      console.warn('[Firestore Listener] firestoreDbが未初期化');
+      return;
+    }
     if (firestoreUnsubscribe) firestoreUnsubscribe();
     const docRef = firestoreDb.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC_ID);
+    console.log('[Firestore Listener] 開始');
     firestoreUnsubscribe = docRef.onSnapshot((snap) => {
-      if (firestoreIgnoreNextSnapshot) {
-        firestoreIgnoreNextSnapshot = false;
+      console.log('[Firestore Listener] snapshot受信', {
+        exists: snap.exists,
+        fromCache: snap.metadata.fromCache,
+        hasPendingWrites: snap.metadata.hasPendingWrites
+      });
+      // ローカルキャッシュから来た変更は無視(サーバーから来たデータのみ反映)
+      if (snap.metadata.hasPendingWrites) {
+        console.log('[Firestore Listener] 自分の書き込み中(pending)、スキップ');
         return;
       }
       if (!snap.exists) return;
@@ -3037,7 +3046,12 @@
         iconTypes: data.iconTypes,
         memoPages: data.memoPages
       });
-      if (dataJson === firestoreLastSaved) return;
+      if (dataJson === firestoreLastSaved) {
+        console.log('[Firestore Listener] 同一データ、スキップ');
+        return;
+      }
+      
+      console.log('[Firestore Listener] 相方/他クライアントの変更を反映します');
       
       // 編集中のブロックがある場合は保護
       const editingBlockId = getCurrentlyEditingBlockId();
