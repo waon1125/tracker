@@ -1299,18 +1299,19 @@
   
   // YouTube Analytics API で詳細データ取得
   // 自チャンネルのみ（OAuth必須）
+  // 注：impressions/CTRはAnalytics APIでは取得不可（YouTube Studio専用）
   async function fetchAnalytics(videoId, videoPublishedAt) {
     if (!isOAuthAuthenticated()) {
       throw new Error('OAuth未認証。設定から連携してください');
     }
-    // videoPublishedAtから現在まで取得
     const startDate = new Date(videoPublishedAt).toISOString().slice(0, 10);
     const endDate = new Date().toISOString().slice(0, 10);
     const url = new URL('https://youtubeanalytics.googleapis.com/v2/reports');
     url.searchParams.set('ids', 'channel==MINE');
     url.searchParams.set('startDate', startDate);
     url.searchParams.set('endDate', endDate);
-    url.searchParams.set('metrics', 'views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,impressions,impressionClickThroughRate,subscribersGained,subscribersLost');
+    // 利用可能なメトリクスのみ（impressions/CTRはAnalytics APIでは動画単位で取得不可）
+    url.searchParams.set('metrics', 'views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,likes,subscribersGained,subscribersLost,shares,comments');
     url.searchParams.set('filters', `video==${videoId}`);
     const res = await fetch(url, {
       headers: { 'Authorization': 'Bearer ' + oauthAccessToken }
@@ -1321,16 +1322,17 @@
     }
     const data = await res.json();
     if (!data.rows || data.rows.length === 0) return null;
-    const [views, watchMinutes, avgDuration, avgPercentage, impressions, ctr, subGained, subLost] = data.rows[0];
+    const [views, watchMinutes, avgDuration, avgPercentage, likes, subGained, subLost, shares, comments] = data.rows[0];
     return {
       views,
       watchMinutes,
       avgDuration, // 秒
       avgPercentage, // %
-      impressions,
-      ctr, // 0-1
+      likes,
       subGained,
-      subLost
+      subLost,
+      shares,
+      comments
     };
   }
 
@@ -1361,18 +1363,19 @@
         datasets: [
           { label: '平均視聴率 (%)', data: snaps.map(s => (s.avgPercentage || 0).toFixed(1)), 
             borderColor: '#ff6b9d', backgroundColor: '#ff6b9d', borderWidth: 3, tension: 0.3, yAxisID: 'y' },
-          { label: 'CTR (%)', data: snaps.map(s => ((s.ctr || 0) * 100).toFixed(2)), 
-            borderColor: '#4ecdc4', backgroundColor: '#4ecdc4', borderWidth: 2, tension: 0.3, yAxisID: 'y' },
           { label: '平均視聴時間 (秒)', data: snaps.map(s => Math.round(s.avgDuration || 0)), 
-            borderColor: '#ffd93d', backgroundColor: '#ffd93d', borderWidth: 2, tension: 0.3, yAxisID: 'y1' },
+            borderColor: '#4ecdc4', backgroundColor: '#4ecdc4', borderWidth: 2, tension: 0.3, yAxisID: 'y1' },
+          { label: '登録者増減', data: snaps.map(s => (s.subGained || 0) - (s.subLost || 0)), 
+            borderColor: '#ffd93d', backgroundColor: '#ffd93d', borderWidth: 2, tension: 0.3, yAxisID: 'y2' },
         ]
       },
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: { legend: { position: 'top' } },
         scales: {
-          y: { position: 'left', title: { display: true, text: '視聴率 / CTR (%)' }, beginAtZero: true },
-          y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '視聴時間 (秒)' }, beginAtZero: true }
+          y: { position: 'left', title: { display: true, text: '視聴率 (%)' }, beginAtZero: true, max: 100 },
+          y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '視聴時間 (秒)' }, beginAtZero: true },
+          y2: { display: false }
         }
       }
     });
@@ -1456,21 +1459,20 @@
   
   function renderAnalyticsData(a, v) {
     const fetched = a.fetchedAt ? new Date(a.fetchedAt).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
-    const ctrPercent = (a.ctr * 100).toFixed(2);
     const retentionPercent = a.avgPercentage?.toFixed(1) ?? '—';
     const avgMin = Math.floor((a.avgDuration || 0) / 60);
     const avgSec = Math.round((a.avgDuration || 0) % 60);
     const netSubs = (a.subGained || 0) - (a.subLost || 0);
     return `
       <div style="padding: 12px; background: var(--dim-bg); border: 2px solid var(--card-border); border-radius: 10px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
           <div style="font-weight: 800; font-size: 13px;">📊 YouTube詳細データ</div>
           <div style="display: flex; gap: 6px; align-items: center;">
             <span style="font-size: 10px; color: var(--text-faint);">取得: ${fetched}</span>
             <button class="btn btn-sm" data-refetch-analytics>🔄 再取得</button>
           </div>
         </div>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px;">
           <div class="analytics-stat">
             <div class="analytics-stat-label">平均視聴率</div>
             <div class="analytics-stat-value">${retentionPercent}%</div>
@@ -1480,16 +1482,12 @@
             <div class="analytics-stat-value">${avgMin}:${String(avgSec).padStart(2,'0')}</div>
           </div>
           <div class="analytics-stat">
-            <div class="analytics-stat-label">インプレッション</div>
-            <div class="analytics-stat-value">${(a.impressions || 0).toLocaleString()}</div>
-          </div>
-          <div class="analytics-stat">
-            <div class="analytics-stat-label">CTR</div>
-            <div class="analytics-stat-value">${ctrPercent}%</div>
-          </div>
-          <div class="analytics-stat">
             <div class="analytics-stat-label">総視聴時間</div>
             <div class="analytics-stat-value">${Math.round(a.watchMinutes || 0).toLocaleString()}分</div>
+          </div>
+          <div class="analytics-stat">
+            <div class="analytics-stat-label">共有数</div>
+            <div class="analytics-stat-value">${(a.shares || 0).toLocaleString()}</div>
           </div>
           <div class="analytics-stat">
             <div class="analytics-stat-label">登録者増減</div>
@@ -1497,6 +1495,13 @@
               ${netSubs >= 0 ? '+' : ''}${netSubs.toLocaleString()}
             </div>
           </div>
+          <div class="analytics-stat">
+            <div class="analytics-stat-label">登録増 / 登録減</div>
+            <div class="analytics-stat-value" style="font-size: 14px;">+${(a.subGained || 0).toLocaleString()} / -${(a.subLost || 0).toLocaleString()}</div>
+          </div>
+        </div>
+        <div style="margin-top: 8px; padding: 6px 8px; background: var(--card-bg); border: 1px dashed var(--section-dashed); border-radius: 6px; font-size: 10px; color: var(--text-faint);">
+          💡 インプレッション数・CTRは YouTube Analytics API の制限で取得できません。YouTubeスタジオで直接確認してください。
         </div>
       </div>
     `;
