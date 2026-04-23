@@ -488,6 +488,10 @@
     const res = await fetch(url);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
+      const reason = err.error?.errors?.[0]?.reason;
+      if (reason === 'quotaExceeded' || reason === 'rateLimitExceeded' || reason === 'userRateLimitExceeded') {
+        throw new Error('⚠️ YouTube APIの1日の上限に達しました。翌日0:00（JST）以降に再度お試しください。\n（YouTube Data API v3 無料枠: 1日10,000ユニット）');
+      }
       throw new Error(`YouTube API: ${err.error?.message || res.statusText}`);
     }
     return await res.json();
@@ -520,7 +524,7 @@
     const results = [];
     for (const chunk of chunks) {
       const data = await youtubeFetch('videos', {
-        part: 'snippet,statistics,contentDetails',
+        part: 'snippet,statistics,contentDetails,liveStreamingDetails',
         id: chunk.join(',')
       });
       results.push(...(data.items || []));
@@ -529,12 +533,48 @@
   }
 
   async function fetchChannelUploads(uploadsPlaylistId, max = 10) {
-    const data = await youtubeFetch('playlistItems', {
-      part: 'contentDetails',
-      playlistId: uploadsPlaylistId,
-      maxResults: max
-    });
-    return (data.items || []).map(item => item.contentDetails.videoId);
+    // playlistItems APIは1リクエストあたり最大50件なので、複数ページ対応
+    const allVideoIds = [];
+    let nextPageToken = null;
+    const pageSize = Math.min(50, max);
+    while (allVideoIds.length < max) {
+      const params = {
+        part: 'contentDetails',
+        playlistId: uploadsPlaylistId,
+        maxResults: pageSize
+      };
+      if (nextPageToken) params.pageToken = nextPageToken;
+      const data = await youtubeFetch('playlistItems', params);
+      const items = data.items || [];
+      for (const item of items) {
+        allVideoIds.push(item.contentDetails.videoId);
+        if (allVideoIds.length >= max) break;
+      }
+      nextPageToken = data.nextPageToken;
+      if (!nextPageToken) break;
+    }
+    return allVideoIds;
+  }
+  
+  // 動画の種類を判別
+  function classifyVideo(info) {
+    // ライブ配信（進行中または配信予定）
+    const liveStatus = info.snippet?.liveBroadcastContent;
+    if (liveStatus === 'live' || liveStatus === 'upcoming') return 'live';
+    // 過去のライブ配信（アーカイブ）
+    if (info.liveStreamingDetails && info.liveStreamingDetails.actualEndTime) return 'live_archive';
+    // ショート動画判定：3分（180秒）以下
+    // ※YouTube仕様（2024年10月以降）：3分以下の動画は縦横問わずショート扱い
+    const duration = info.contentDetails?.duration || '';
+    const m = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if (m) {
+      const h = parseInt(m[1] || 0);
+      const min = parseInt(m[2] || 0);
+      const s = parseInt(m[3] || 0);
+      const totalSeconds = h * 3600 + min * 60 + s;
+      if (totalSeconds > 0 && totalSeconds <= 180) return 'short';
+    }
+    return 'normal';
   }
 
   // ==== タブ ====
@@ -613,43 +653,77 @@
   }
 
   // 動画取得
-  async function fetchVideosForChannel(channelInfo, tabKey, maxVideos = 10) {
+  async function fetchVideosForChannel(channelInfo, tabKey, targetCount = 10, options = {}) {
+    // options.includeShorts = true でショート含める
+    // options.includeLive = true でライブ含める
+    const includeShorts = options.includeShorts === true;
+    const includeLive = options.includeLive === true;
     try {
-      const videoIds = await fetchChannelUploads(channelInfo.uploadsPlaylistId, maxVideos);
       const existingIds = new Set(videos.filter(v => v.channelId === channelInfo.id).map(v => v.videoId));
-      const newIds = videoIds.filter(id => !existingIds.has(id));
-      if (newIds.length === 0) { renderAll(); return 0; }
-      const infos = await fetchVideoInfo(newIds);
+      const addedIds = []; // 今回追加される動画ID
+      let skippedShort = 0, skippedLive = 0, skippedArchive = 0;
+      
+      // 最大で targetCount * 3 件まで探索（ショート/ライブが混ざる可能性を考慮）
+      const fetchLimit = Math.max(targetCount * 3, targetCount + 50);
+      const videoIds = await fetchChannelUploads(channelInfo.uploadsPlaylistId, fetchLimit);
+      
+      // 既存を除外
+      const candidateIds = videoIds.filter(id => !existingIds.has(id));
+      if (candidateIds.length === 0) { renderAll(); return { added: 0, skippedShort: 0, skippedLive: 0, skippedArchive: 0 }; }
+      
+      // バッチで詳細情報取得（50件ずつ）
       const now = new Date().toISOString();
-      for (const info of infos) {
-        videos.push({
-          id: 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
-          videoId: info.id,
-          title: info.snippet.title,
-          description: (info.snippet.description || '').slice(0, 500),
-          channelId: info.snippet.channelId,
-          channelTitle: info.snippet.channelTitle,
-          tabKey: tabKey,
-          thumbnailUrl: info.snippet.thumbnails?.medium?.url || info.snippet.thumbnails?.default?.url || '',
-          publishedAt: info.snippet.publishedAt,
-          duration: info.contentDetails.duration,
-          tags: info.snippet.tags || [],
-          snapshots: [{
-            at: now,
-            views: parseInt(info.statistics.viewCount || 0),
-            likes: parseInt(info.statistics.likeCount || 0),
-            comments: parseInt(info.statistics.commentCount || 0)
-          }],
-          addedAt: now
-        });
+      let batchStart = 0;
+      while (addedIds.length < targetCount && batchStart < candidateIds.length) {
+        const batchIds = candidateIds.slice(batchStart, batchStart + 50);
+        const infos = await fetchVideoInfo(batchIds);
+        batchStart += 50;
+        
+        for (const info of infos) {
+          if (addedIds.length >= targetCount) break;
+          const kind = classifyVideo(info);
+          if (kind === 'short' && !includeShorts) { skippedShort++; continue; }
+          if (kind === 'live' && !includeLive) { skippedLive++; continue; }
+          if (kind === 'live_archive' && !includeLive) { skippedArchive++; continue; }
+          
+          videos.push({
+            id: 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+            videoId: info.id,
+            title: info.snippet.title,
+            description: (info.snippet.description || '').slice(0, 500),
+            channelId: info.snippet.channelId,
+            channelTitle: info.snippet.channelTitle,
+            tabKey: tabKey,
+            thumbnailUrl: info.snippet.thumbnails?.medium?.url || info.snippet.thumbnails?.default?.url || '',
+            publishedAt: info.snippet.publishedAt,
+            duration: info.contentDetails.duration,
+            videoKind: kind, // 'normal' | 'short' | 'live' | 'live_archive'
+            tags: info.snippet.tags || [],
+            snapshots: [{
+              at: now,
+              views: parseInt(info.statistics.viewCount || 0),
+              likes: parseInt(info.statistics.likeCount || 0),
+              comments: parseInt(info.statistics.commentCount || 0)
+            }],
+            addedAt: now
+          });
+          addedIds.push(info.id);
+        }
       }
+      
       await saveFirestoreData();
       renderAll();
-      return newIds.length;
+      return { 
+        added: addedIds.length, 
+        skippedShort, 
+        skippedLive, 
+        skippedArchive,
+        exhausted: batchStart >= candidateIds.length && addedIds.length < targetCount
+      };
     } catch (err) {
       console.error(err);
       alert('動画取得失敗: ' + err.message);
-      return 0;
+      return { added: 0, skippedShort: 0, skippedLive: 0, skippedArchive: 0 };
     }
   }
 
@@ -731,14 +805,28 @@
             </div>
             <div class="ci-actions">
               <button class="btn btn-sm btn-success" data-fixed-snapshot="${tabKey}">📸 スナップショット取得</button>
-              <button class="btn btn-sm" data-fixed-refresh="${tabKey}">🔄 最新動画</button>
               <button class="btn btn-sm btn-primary" data-fixed-analytics="${tabKey}">📊 詳細データ一斉取得</button>
               <button class="btn btn-sm btn-danger" data-fixed-remove="${tabKey}">🗑️ 解除</button>
             </div>
           </div>
         </div>
         <div class="section">
-          <h3 class="section-title">🎬 追跡中の動画</h3>
+          <h3 class="section-title">🎬 動画を追加取得</h3>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px;">
+            <label style="font-size: 12px; font-weight: 700;">本数:</label>
+            <input type="number" id="fetch-count-${tabKey}" class="input-field" value="10" min="1" max="200" style="width: 80px; flex: 0 0 auto;">
+            <label style="font-size: 12px; display: flex; align-items: center; gap: 4px;">
+              <input type="checkbox" id="include-shorts-${tabKey}"> ショート含める
+            </label>
+            <label style="font-size: 12px; display: flex; align-items: center; gap: 4px;">
+              <input type="checkbox" id="include-live-${tabKey}"> ライブ含める
+            </label>
+            <button class="btn btn-sm" data-fixed-refresh="${tabKey}">🔄 取得</button>
+          </div>
+          <p class="hint">💡 デフォルトは3分超の通常動画のみ取得。ショート（3分以下）・ライブ・ライブアーカイブは自動除外。大量取得（50本以上）はAPI制限に注意</p>
+        </div>
+        <div class="section">
+          <h3 class="section-title">🎬 追跡中の動画 (${vids.length}本)</h3>
           ${vids.length === 0 
             ? `<div class="empty-state"><div class="empty-emoji">🎬</div><div class="empty-text">動画がまだ取得されていません</div></div>`
             : renderVideoListHtml(vids)}
@@ -756,11 +844,28 @@
       });
       container.querySelector('[data-fixed-refresh]').addEventListener('click', async (e) => {
         const btn = e.currentTarget;
+        const countInput = document.getElementById('fetch-count-' + tabKey);
+        const shortsInput = document.getElementById('include-shorts-' + tabKey);
+        const liveInput = document.getElementById('include-live-' + tabKey);
+        const targetCount = Math.max(1, Math.min(200, parseInt(countInput?.value || '10')));
+        const options = {
+          includeShorts: shortsInput?.checked || false,
+          includeLive: liveInput?.checked || false
+        };
+        if (targetCount > 50 && !confirm(`${targetCount}本の取得はAPI制限に影響する可能性があります。続行しますか？`)) return;
         btn.disabled = true; btn.textContent = '🔄 取得中...';
         try {
-          const n = await fetchVideosForChannel(ch.info, tabKey, 10);
-          alert(`${n}本の新規動画を追加しました`);
-        } finally { btn.disabled = false; btn.textContent = '🔄 最新動画'; }
+          const result = await fetchVideosForChannel(ch.info, tabKey, targetCount, options);
+          let msg = `✅ ${result.added}本の新規動画を追加しました`;
+          if (result.skippedShort > 0) msg += `\n・ショート除外: ${result.skippedShort}本`;
+          if (result.skippedLive > 0) msg += `\n・ライブ除外: ${result.skippedLive}本`;
+          if (result.skippedArchive > 0) msg += `\n・ライブアーカイブ除外: ${result.skippedArchive}本`;
+          if (result.exhausted) msg += `\n\n⚠️ チャンネルの動画が尽きました（指定本数に達する前）`;
+          if (result.added === 0 && result.skippedShort === 0 && result.skippedLive === 0 && result.skippedArchive === 0) {
+            msg = 'ℹ️ 新規動画はありませんでした（既に全て取得済み）';
+          }
+          alert(msg);
+        } finally { btn.disabled = false; btn.textContent = '🔄 取得'; }
       });
       container.querySelector('[data-fixed-remove]').addEventListener('click', () => removeFixedChannel(tabKey));
       
@@ -935,8 +1040,15 @@
         if (!ch) return;
         btn.disabled = true; btn.textContent = '取得中...';
         try {
-          const n = await fetchVideosForChannel(ch.info, 'rival', 10);
-          alert(`${n}本の新規動画を追加しました`);
+          const result = await fetchVideosForChannel(ch.info, 'rival', 10);
+          let msg = `✅ ${result.added}本の新規動画を追加しました`;
+          if (result.skippedShort > 0) msg += `\n・ショート除外: ${result.skippedShort}本`;
+          if (result.skippedLive > 0) msg += `\n・ライブ除外: ${result.skippedLive}本`;
+          if (result.skippedArchive > 0) msg += `\n・ライブアーカイブ除外: ${result.skippedArchive}本`;
+          if (result.added === 0 && result.skippedShort === 0 && result.skippedLive === 0 && result.skippedArchive === 0) {
+            msg = 'ℹ️ 新規動画はありませんでした';
+          }
+          alert(msg);
         } finally { btn.disabled = false; btn.textContent = '🔄 新着'; }
       });
     });
@@ -1068,7 +1180,10 @@
       <div class="chart-wrap">
         <canvas id="detailChartCanvas"></canvas>
       </div>
-      <h3 style="margin: 12px 0 6px; font-size: 13px;">📊 スナップショット履歴</h3>
+      <h3 style="margin: 12px 0 6px; font-size: 13px; display: flex; justify-content: space-between; align-items: center;">
+        <span>📊 スナップショット履歴</span>
+        <button class="btn btn-sm btn-ghost" data-clear-snapshots="${v.id}" style="color: var(--danger); font-size: 11px;">🗑️ 全履歴削除</button>
+      </h3>
       <table class="snapshot-table">
         <thead>
           <tr>
@@ -1077,11 +1192,13 @@
             <th class="right">👀 再生</th>
             <th class="right">👍 いいね</th>
             <th class="right">💬 コメント</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
-          ${snaps.slice().reverse().map(s => {
+          ${snaps.slice().reverse().map((s, idx) => {
             const at = new Date(s.at);
+            const origIdx = snaps.length - 1 - idx;
             return `
               <tr>
                 <td>${at.toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
@@ -1089,6 +1206,7 @@
                 <td class="right">${s.views.toLocaleString()}</td>
                 <td class="right">${s.likes.toLocaleString()}</td>
                 <td class="right">${s.comments.toLocaleString()}</td>
+                <td><button class="btn btn-sm btn-ghost" data-del-snapshot="${v.id}" data-snap-idx="${origIdx}" style="color: var(--danger); padding: 2px 6px;" title="このスナップショットを削除">🗑️</button></td>
               </tr>
             `;
           }).join('')}
@@ -1108,6 +1226,46 @@
       } else {
         chartWrap.style.display = 'none';
       }
+    }
+    
+    // スナップショット個別削除ハンドラー
+    document.querySelectorAll('[data-del-snapshot]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const vid = btn.dataset.delSnapshot;
+        const idx = parseInt(btn.dataset.snapIdx);
+        const video = videos.find(x => x.id === vid);
+        if (!video || !video.snapshots) return;
+        const snap = video.snapshots[idx];
+        if (!snap) return;
+        const at = new Date(snap.at).toLocaleString('ja-JP');
+        if (!confirm(`このスナップショットを削除しますか？\n\n日時: ${at}\n再生: ${snap.views.toLocaleString()}\nいいね: ${snap.likes.toLocaleString()}`)) return;
+        video.snapshots.splice(idx, 1);
+        await saveFirestoreData();
+        renderAll();
+        // モーダルを再描画
+        showVideoDetail(vid);
+      });
+    });
+    
+    // 全スナップショット削除
+    const clearBtn = document.querySelector('[data-clear-snapshots]');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', async () => {
+        const vid = clearBtn.dataset.clearSnapshots;
+        const video = videos.find(x => x.id === vid);
+        if (!video) return;
+        if (!confirm(`⚠️ この動画の全スナップショット履歴を削除しますか？\n\n現在 ${(video.snapshots || []).length} 件あります。\n※ Analytics詳細データも含めて削除されます`)) return;
+        video.snapshots = [];
+        video.analyticsSnapshots = [];
+        video.analytics = null;
+        await saveFirestoreData();
+        renderAll();
+        // モーダルを閉じる
+        document.getElementById('videoDetailModal').classList.remove('show');
+        if (detailChart) { detailChart.destroy(); detailChart = null; }
+        if (analyticsChart) { analyticsChart.destroy(); analyticsChart = null; }
+      });
     }
     
     document.getElementById('videoDetailModal').classList.add('show');
@@ -1352,6 +1510,13 @@
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
+      const reason = err.error?.errors?.[0]?.reason;
+      if (reason === 'quotaExceeded' || reason === 'rateLimitExceeded') {
+        throw new Error('⚠️ YouTube Analytics APIの上限に達しました。しばらく時間をおいて再試行してください。');
+      }
+      if (res.status === 401 || reason === 'authError') {
+        throw new Error('OAuth認証が切れました。⚙️設定から再連携してください。');
+      }
       throw new Error(err.error?.message || res.statusText);
     }
     const data = await res.json();
