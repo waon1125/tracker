@@ -2734,9 +2734,6 @@
   let viewingPhaseIdx = null;
   let editingPhaseIdx = null;
   let editingNewPhase = false;
-  let ghToken = '';
-  let gistId = '';
-  let lastSyncTime = null;
   let syncInProgress = false;
 
   // ===== カレンダー機能 =====
@@ -2814,8 +2811,6 @@
   };
 
   function loadSettings() {
-    ghToken = localStorage.getItem('tracker_gh_token') || '';
-    gistId = localStorage.getItem('tracker_gist_id') || '';
     const range = localStorage.getItem('tracker_range');
     if (['1w', '1m', '6m', '1y', 'all'].includes(range)) currentRange = range;
     const agg = localStorage.getItem('tracker_agg');
@@ -2900,6 +2895,19 @@
     } else if (state === 'offline') { footer.textContent = '未接続'; }
     else if (state === 'error') { footer.textContent = 'エラー'; }
     else { footer.textContent = text; }
+  }
+
+  // ================================================================
+  // ===== ヘルパー関数 =====
+  // ================================================================
+  
+  // 現在フォーカスされている要素のブロックIDを取得
+  // Firestoreリスナーで編集中ブロック保護などに使用
+  function getCurrentlyEditingBlockId() {
+    const active = document.activeElement;
+    if (!active) return null;
+    const blockEl = active.closest('[data-block-id]');
+    return blockEl ? blockEl.dataset.blockId : null;
   }
 
   // ================================================================
