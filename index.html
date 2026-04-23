@@ -3057,18 +3057,35 @@
       const editingBlockId = getCurrentlyEditingBlockId();
       const localEditingBlock = editingBlockId ? findEditingBlockSnapshot(editingBlockId) : null;
       
+      console.log('[Firestore Listener] 適用前 memoPages数:', memoPages.length,
+                  'channels.ch1.videos数:', channels.ch1.videos.length);
+      
       applyFirestoreData(data);
       firestoreLastSaved = dataJson;
+      
+      console.log('[Firestore Listener] 適用後 memoPages数:', memoPages.length,
+                  'channels.ch1.videos数:', channels.ch1.videos.length);
       
       // 編集中のブロックを復元
       if (editingBlockId && localEditingBlock) {
         restoreEditingBlock(editingBlockId, localEditingBlock);
       }
       
-      // 現在のビューを再描画
-      if (currentView === 'tracker') renderAll();
-      if (currentView === 'calendar') renderCalendar();
-      if (currentView === 'memo' && !editingBlockId) renderMemoContent();
+      // ビューを再描画（編集中でも必要な部分は描画、ただしメモで編集中ブロックがあれば慎重に）
+      console.log('[Firestore Listener] 再描画中, currentView:', currentView);
+      if (currentView === 'tracker') {
+        renderAll();
+      } else if (currentView === 'calendar') {
+        renderCalendar();
+      } else if (currentView === 'memo') {
+        if (!editingBlockId) {
+          renderMemoContent();
+        } else {
+          // 編集中はサイドバーだけ更新（メモ本体は触らない）
+          console.log('[Firestore Listener] メモ編集中、本体は再描画をスキップ');
+          renderMemoView();
+        }
+      }
       
       setSyncStatus('synced', '👥 相方の変更を反映');
       setTimeout(() => {
