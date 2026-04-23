@@ -41,6 +41,21 @@
     --input-bg: #fffbee; --input-focus-bg: #fff;
     --section-dashed: #c8a97e; --dim-bg: #f5ebd5; --on-accent: #fff;
   }
+  [data-theme="dark"] {
+    --bg: #1a1a2e; --text: #e8e8ea; --text-muted: #b0b0ba; --text-faint: #7a7a85;
+    --card-bg: #2a2a3e; --card-border: #4a4a5e; --shadow: rgba(0,0,0,0.4);
+    --accent-light-yellow: #3a3a4e;
+    --danger-bg: #4a2a2e;
+    --input-bg: #1f1f33; --input-focus-bg: #242438;
+    --section-dashed: #4a4a5e; --dim-bg: #222233;
+  }
+  /* テーマカラーバリエーション */
+  [data-color="pink"] { --accent-pink: #ff6b9d; --accent-teal: #4ecdc4; --accent-yellow: #ffd93d; }
+  [data-color="blue"] { --accent-pink: #6bb5ff; --accent-teal: #4ecdc4; --accent-yellow: #a0e7e5; }
+  [data-color="purple"] { --accent-pink: #b983ff; --accent-teal: #94b3fd; --accent-yellow: #94daff; }
+  [data-color="green"] { --accent-pink: #5eb88a; --accent-teal: #ffd93d; --accent-yellow: #fff5b0; }
+  [data-color="orange"] { --accent-pink: #ff9a3c; --accent-teal: #ffc93c; --accent-yellow: #ffe66d; }
+  [data-color="mono"] { --accent-pink: #2d2d2d; --accent-teal: #555; --accent-yellow: #888; }
   * { box-sizing: border-box; }
   body { font-family: 'M PLUS Rounded 1c', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 16px; min-height: 100vh; }
   .container { max-width: 1200px; margin: 0 auto; }
@@ -136,6 +151,18 @@
   .tab-content { display: none; }
   .tab-content.active { display: block; }
   .snapshot-btn-row { display: flex; gap: 8px; flex-wrap: wrap; padding: 10px; background: var(--dim-bg); border: 2px solid var(--card-border); border-radius: 10px; margin-bottom: 12px; }
+  
+  .color-picker-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .color-btn { padding: 8px 14px; border: 2px solid var(--card-border); border-radius: 10px; background: var(--card-bg); color: var(--text); font-family: 'M PLUS Rounded 1c', sans-serif; font-weight: 700; font-size: 12px; cursor: pointer; box-shadow: 2px 2px 0 var(--shadow); transition: all 0.15s; }
+  .color-btn:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--shadow); }
+  .color-btn.active { background: var(--accent-pink); color: var(--on-accent); }
+  .color-swatch { display: inline-flex; gap: 2px; padding: 8px; align-items: center; }
+  .color-swatch span { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--card-border); }
+  .color-swatch.active { box-shadow: 0 0 0 3px var(--accent-pink), 2px 2px 0 var(--shadow); }
+  
+  .analytics-stat { padding: 8px 10px; background: var(--card-bg); border: 1.5px solid var(--card-border); border-radius: 8px; text-align: center; }
+  .analytics-stat-label { font-size: 10px; color: var(--text-muted); font-weight: 700; }
+  .analytics-stat-value { font-size: 18px; font-weight: 900; color: var(--accent-pink); margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -166,6 +193,8 @@
       <span id="lastUpdate" class="last-update"></span>
     </h1>
     <div class="nav-links">
+      <button id="themeToggleBtn" class="nav-link" title="ダークモード切替">🌓</button>
+      <button id="settingsBtn" class="nav-link" title="設定">⚙️</button>
       <a href="./" class="nav-link">🎬 トラッカーへ</a>
       <button id="logoutBtn" class="nav-link">🚪 ログアウト</button>
     </div>
@@ -177,6 +206,73 @@
   <div id="tab-copi" class="tab-content"></div>
   <div id="tab-waon" class="tab-content"></div>
   <div id="tab-rival" class="tab-content"></div>
+</div>
+
+<!-- 設定モーダル -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal" style="max-width: 500px;">
+    <div class="modal-title">
+      <span>⚙️</span><span>設定</span>
+    </div>
+    
+    <div style="margin-bottom: 16px;">
+      <div style="font-size: 13px; font-weight: 800; margin-bottom: 6px;">🌓 表示モード</div>
+      <div class="color-picker-row">
+        <button class="color-btn" data-theme-set="light">☀️ ライト</button>
+        <button class="color-btn" data-theme-set="dark">🌙 ダーク</button>
+      </div>
+    </div>
+    
+    <div style="margin-bottom: 16px;">
+      <div style="font-size: 13px; font-weight: 800; margin-bottom: 6px;">🎨 カラーテーマ</div>
+      <div class="color-picker-row">
+        <button class="color-btn color-swatch" data-color-set="pink" title="ピンク">
+          <span style="background:#ff6b9d"></span>
+          <span style="background:#4ecdc4"></span>
+          <span style="background:#ffd93d"></span>
+        </button>
+        <button class="color-btn color-swatch" data-color-set="blue" title="ブルー">
+          <span style="background:#6bb5ff"></span>
+          <span style="background:#4ecdc4"></span>
+          <span style="background:#a0e7e5"></span>
+        </button>
+        <button class="color-btn color-swatch" data-color-set="purple" title="パープル">
+          <span style="background:#b983ff"></span>
+          <span style="background:#94b3fd"></span>
+          <span style="background:#94daff"></span>
+        </button>
+        <button class="color-btn color-swatch" data-color-set="green" title="グリーン">
+          <span style="background:#5eb88a"></span>
+          <span style="background:#ffd93d"></span>
+          <span style="background:#fff5b0"></span>
+        </button>
+        <button class="color-btn color-swatch" data-color-set="orange" title="オレンジ">
+          <span style="background:#ff9a3c"></span>
+          <span style="background:#ffc93c"></span>
+          <span style="background:#ffe66d"></span>
+        </button>
+        <button class="color-btn color-swatch" data-color-set="mono" title="モノクロ">
+          <span style="background:#2d2d2d"></span>
+          <span style="background:#555"></span>
+          <span style="background:#888"></span>
+        </button>
+      </div>
+    </div>
+    
+    <div style="margin-bottom: 16px;">
+      <div style="font-size: 13px; font-weight: 800; margin-bottom: 6px;">🔐 YouTube詳細データ連携</div>
+      <div id="oauthStatusBox" style="padding: 10px; background: var(--dim-bg); border: 2px solid var(--card-border); border-radius: 8px; font-size: 12px;">
+        <div style="margin-bottom: 6px;">自分のチャンネルの維持率・CTR・平均視聴時間などの<br>詳細データを取得するには、OAuth認証が必要です。</div>
+        <div id="oauthStatus" style="margin-bottom: 8px; font-weight: 700;">📴 未連携</div>
+        <button id="oauthLoginBtn" class="btn btn-sm btn-primary">🔐 YouTube連携</button>
+        <button id="oauthLogoutBtn" class="btn btn-sm btn-ghost hidden" style="color: var(--danger);">🚪 連携解除</button>
+      </div>
+    </div>
+    
+    <div style="text-align: right; margin-top: 16px;">
+      <button class="btn btn-ghost" id="closeSettingsBtn">閉じる</button>
+    </div>
+  </div>
 </div>
 
 <!-- 動画詳細モーダル -->
@@ -199,6 +295,22 @@
   let videos = [];
   // 競合チャンネルの折りたたみ状態（channelIdのSet）
   const collapsedRivals = new Set();
+  
+  // テーマ設定
+  let currentTheme = localStorage.getItem('analyzer_theme') || 'light';
+  let currentColor = localStorage.getItem('analyzer_color') || 'pink';
+  
+  // OAuth認証（YouTube Analytics API用）
+  // アクセストークンはメモリに保持。リロードで消えるので再認証が必要
+  let oauthAccessToken = null;
+  let oauthTokenExpireAt = 0;
+  let oauthMyChannelId = null; // 認証ユーザーの自チャンネルID
+  
+  function applyTheme() {
+    document.documentElement.setAttribute('data-theme', currentTheme);
+    document.documentElement.setAttribute('data-color', currentColor);
+  }
+  applyTheme();
 
   function showLogin() { document.getElementById('loginScreen').classList.remove('hidden'); }
   function hideLogin() { document.getElementById('loginScreen').classList.add('hidden'); }
@@ -866,6 +978,10 @@
           <a href="https://www.youtube.com/watch?v=${v.videoId}" target="_blank" class="btn btn-sm">▶️ YouTubeで見る</a>
         </div>
       </div>
+      
+      <!-- 詳細データ（OAuth連携時のみ） -->
+      <div id="analyticsSection" style="margin-bottom: 12px;"></div>
+      
       <div class="chart-wrap">
         <canvas id="detailChartCanvas"></canvas>
       </div>
@@ -896,6 +1012,9 @@
         </tbody>
       </table>
     `;
+    
+    // 自分のチャンネルの動画かつOAuth認証済みなら詳細データセクション表示
+    renderAnalyticsSection(v);
     
     document.getElementById('videoDetailModal').classList.add('show');
     
@@ -944,12 +1063,300 @@
     }
   });
 
+  // ==== テーマ切替 ====
+  document.getElementById('themeToggleBtn').addEventListener('click', () => {
+    currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('analyzer_theme', currentTheme);
+    applyTheme();
+    updateSettingsModal();
+  });
+  
+  // 設定モーダル
+  function openSettingsModal() {
+    updateSettingsModal();
+    document.getElementById('settingsModal').classList.add('show');
+  }
+  function closeSettingsModal() {
+    document.getElementById('settingsModal').classList.remove('show');
+  }
+  function updateSettingsModal() {
+    // テーマボタン
+    document.querySelectorAll('[data-theme-set]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.themeSet === currentTheme);
+    });
+    // カラーボタン
+    document.querySelectorAll('[data-color-set]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.colorSet === currentColor);
+    });
+    // OAuth状態
+    const statusEl = document.getElementById('oauthStatus');
+    const loginBtn = document.getElementById('oauthLoginBtn');
+    const logoutBtn = document.getElementById('oauthLogoutBtn');
+    if (isOAuthAuthenticated()) {
+      statusEl.innerHTML = `🟢 連携中（チャンネルID: ${oauthMyChannelId || '取得済み'}）`;
+      statusEl.style.color = 'var(--accent-teal)';
+      loginBtn.classList.add('hidden');
+      logoutBtn.classList.remove('hidden');
+    } else {
+      statusEl.textContent = '📴 未連携';
+      statusEl.style.color = '';
+      loginBtn.classList.remove('hidden');
+      logoutBtn.classList.add('hidden');
+    }
+  }
+  
+  document.getElementById('settingsBtn').addEventListener('click', openSettingsModal);
+  document.getElementById('closeSettingsBtn').addEventListener('click', closeSettingsModal);
+  document.getElementById('settingsModal').addEventListener('click', (e) => {
+    if (e.target.id === 'settingsModal') closeSettingsModal();
+  });
+  
+  document.querySelectorAll('[data-theme-set]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentTheme = btn.dataset.themeSet;
+      localStorage.setItem('analyzer_theme', currentTheme);
+      applyTheme();
+      updateSettingsModal();
+    });
+  });
+  
+  document.querySelectorAll('[data-color-set]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentColor = btn.dataset.colorSet;
+      localStorage.setItem('analyzer_color', currentColor);
+      applyTheme();
+      updateSettingsModal();
+    });
+  });
+  
+  // ==== OAuth認証（YouTube Analytics API用） ====
+  // Firebase Authで既にGoogleログイン済みだが、Analytics APIには
+  // 追加スコープ（youtube.readonly, yt-analytics.readonly）が必要なので
+  // 再度OAuth認可を取る必要がある
+  const YT_ANALYTICS_SCOPES = [
+    'https://www.googleapis.com/auth/youtube.readonly',
+    'https://www.googleapis.com/auth/yt-analytics.readonly'
+  ].join(' ');
+  
+  function isOAuthAuthenticated() {
+    return oauthAccessToken && Date.now() < oauthTokenExpireAt;
+  }
+  
+  document.getElementById('oauthLoginBtn').addEventListener('click', async () => {
+    try {
+      // Google Identity Services でトークン取得
+      // ポップアップで認可フロー
+      const clientId = firebaseConfig.appId.split(':')[1] + '-' + firebaseConfig.messagingSenderId.slice(0, 8);
+      // 注：正しいclientIdはFirebase Auth が内部で持っているので、代替アプローチ：
+      // firebase authのprovider再認証で追加スコープを要求
+      const provider = new firebase.auth.GoogleAuthProvider();
+      provider.addScope('https://www.googleapis.com/auth/youtube.readonly');
+      provider.addScope('https://www.googleapis.com/auth/yt-analytics.readonly');
+      provider.setCustomParameters({ prompt: 'consent' });
+      
+      const result = await firebaseAuth.signInWithPopup(provider);
+      const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
+      const token = credential?.accessToken;
+      if (!token) throw new Error('アクセストークン取得失敗');
+      
+      oauthAccessToken = token;
+      // Googleアクセストークンは通常1時間有効
+      oauthTokenExpireAt = Date.now() + 55 * 60 * 1000;
+      
+      // 自チャンネルIDを取得
+      await fetchMyChannelId();
+      
+      alert('✅ YouTube連携に成功しました！\n自分のチャンネルの維持率・CTR等の詳細データが取得できます。');
+      updateSettingsModal();
+      renderAll();
+    } catch (err) {
+      console.error('OAuth error:', err);
+      alert('連携失敗: ' + err.message);
+    }
+  });
+  
+  document.getElementById('oauthLogoutBtn').addEventListener('click', () => {
+    oauthAccessToken = null;
+    oauthTokenExpireAt = 0;
+    oauthMyChannelId = null;
+    updateSettingsModal();
+    alert('連携を解除しました');
+  });
+  
+  async function fetchMyChannelId() {
+    if (!oauthAccessToken) return null;
+    const res = await fetch('https://www.googleapis.com/youtube/v3/channels?part=id&mine=true', {
+      headers: { 'Authorization': 'Bearer ' + oauthAccessToken }
+    });
+    const data = await res.json();
+    if (data.items && data.items.length > 0) {
+      oauthMyChannelId = data.items[0].id;
+      return oauthMyChannelId;
+    }
+    return null;
+  }
+  
+  // YouTube Analytics API で詳細データ取得
+  // 自チャンネルのみ（OAuth必須）
+  async function fetchAnalytics(videoId, videoPublishedAt) {
+    if (!isOAuthAuthenticated()) {
+      throw new Error('OAuth未認証。設定から連携してください');
+    }
+    // videoPublishedAtから現在まで取得
+    const startDate = new Date(videoPublishedAt).toISOString().slice(0, 10);
+    const endDate = new Date().toISOString().slice(0, 10);
+    const url = new URL('https://youtubeanalytics.googleapis.com/v2/reports');
+    url.searchParams.set('ids', 'channel==MINE');
+    url.searchParams.set('startDate', startDate);
+    url.searchParams.set('endDate', endDate);
+    url.searchParams.set('metrics', 'views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,impressions,impressionClickThroughRate,subscribersGained,subscribersLost');
+    url.searchParams.set('filters', `video==${videoId}`);
+    const res = await fetch(url, {
+      headers: { 'Authorization': 'Bearer ' + oauthAccessToken }
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || res.statusText);
+    }
+    const data = await res.json();
+    if (!data.rows || data.rows.length === 0) return null;
+    const [views, watchMinutes, avgDuration, avgPercentage, impressions, ctr, subGained, subLost] = data.rows[0];
+    return {
+      views,
+      watchMinutes,
+      avgDuration, // 秒
+      avgPercentage, // %
+      impressions,
+      ctr, // 0-1
+      subGained,
+      subLost
+    };
+  }
+
+  function renderAnalyticsSection(v) {
+    const section = document.getElementById('analyticsSection');
+    if (!section) return;
+    const isMine = (v.tabKey === 'copi' || v.tabKey === 'waon');
+    
+    if (!isMine) {
+      section.innerHTML = `
+        <div style="padding: 10px; background: var(--dim-bg); border: 2px dashed var(--section-dashed); border-radius: 8px; font-size: 11px; color: var(--text-muted);">
+          💡 競合チャンネルは詳細データ（維持率・CTR等）を取得できません（YouTube制約）
+        </div>
+      `;
+      return;
+    }
+    
+    if (!isOAuthAuthenticated()) {
+      section.innerHTML = `
+        <div style="padding: 10px; background: var(--dim-bg); border: 2px dashed var(--section-dashed); border-radius: 8px; font-size: 12px;">
+          <div style="font-weight: 700; margin-bottom: 6px;">🔐 詳細データ未取得</div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">
+            維持率・平均視聴時間・CTRなどを取得するには、⚙️設定からYouTube連携してください。
+          </div>
+          <button class="btn btn-sm btn-primary" onclick="document.getElementById('settingsBtn').click()">⚙️ 設定を開く</button>
+        </div>
+      `;
+      return;
+    }
+    
+    // 既に取得済みならキャッシュ表示、なければ取得ボタン表示
+    if (v.analytics) {
+      section.innerHTML = renderAnalyticsData(v.analytics, v);
+      section.querySelector('[data-refetch-analytics]')?.addEventListener('click', () => fetchAndShowAnalytics(v));
+    } else {
+      section.innerHTML = `
+        <div style="padding: 10px; background: var(--dim-bg); border: 2px solid var(--card-border); border-radius: 8px;">
+          <button class="btn btn-sm btn-primary" data-fetch-analytics>📊 詳細データを取得</button>
+          <span style="font-size: 11px; color: var(--text-muted); margin-left: 8px;">維持率・CTR・平均視聴時間など</span>
+        </div>
+      `;
+      section.querySelector('[data-fetch-analytics]').addEventListener('click', () => fetchAndShowAnalytics(v));
+    }
+  }
+  
+  async function fetchAndShowAnalytics(v) {
+    const section = document.getElementById('analyticsSection');
+    if (!section) return;
+    section.innerHTML = '<div style="padding: 10px; color: var(--text-muted);">⏳ 取得中...</div>';
+    try {
+      const data = await fetchAnalytics(v.videoId, v.publishedAt);
+      if (!data) {
+        section.innerHTML = `
+          <div style="padding: 10px; background: var(--dim-bg); border: 2px solid var(--card-border); border-radius: 8px; font-size: 12px;">
+            ⚠️ データが取得できませんでした（投稿直後の場合、まだデータが反映されていない可能性があります）
+          </div>
+        `;
+        return;
+      }
+      // キャッシュ
+      v.analytics = { ...data, fetchedAt: new Date().toISOString() };
+      await saveFirestoreData();
+      section.innerHTML = renderAnalyticsData(v.analytics, v);
+      section.querySelector('[data-refetch-analytics]')?.addEventListener('click', () => fetchAndShowAnalytics(v));
+    } catch (err) {
+      section.innerHTML = `
+        <div style="padding: 10px; background: var(--danger-bg); border: 2px solid var(--danger); border-radius: 8px; font-size: 12px; color: var(--danger);">
+          エラー: ${escapeHtml(err.message)}
+        </div>
+      `;
+    }
+  }
+  
+  function renderAnalyticsData(a, v) {
+    const fetched = a.fetchedAt ? new Date(a.fetchedAt).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+    const ctrPercent = (a.ctr * 100).toFixed(2);
+    const retentionPercent = a.avgPercentage?.toFixed(1) ?? '—';
+    const avgMin = Math.floor((a.avgDuration || 0) / 60);
+    const avgSec = Math.round((a.avgDuration || 0) % 60);
+    const netSubs = (a.subGained || 0) - (a.subLost || 0);
+    return `
+      <div style="padding: 12px; background: var(--dim-bg); border: 2px solid var(--card-border); border-radius: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div style="font-weight: 800; font-size: 13px;">📊 YouTube詳細データ</div>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <span style="font-size: 10px; color: var(--text-faint);">取得: ${fetched}</span>
+            <button class="btn btn-sm" data-refetch-analytics>🔄 再取得</button>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px;">
+          <div class="analytics-stat">
+            <div class="analytics-stat-label">平均視聴率</div>
+            <div class="analytics-stat-value">${retentionPercent}%</div>
+          </div>
+          <div class="analytics-stat">
+            <div class="analytics-stat-label">平均視聴時間</div>
+            <div class="analytics-stat-value">${avgMin}:${String(avgSec).padStart(2,'0')}</div>
+          </div>
+          <div class="analytics-stat">
+            <div class="analytics-stat-label">インプレッション</div>
+            <div class="analytics-stat-value">${(a.impressions || 0).toLocaleString()}</div>
+          </div>
+          <div class="analytics-stat">
+            <div class="analytics-stat-label">CTR</div>
+            <div class="analytics-stat-value">${ctrPercent}%</div>
+          </div>
+          <div class="analytics-stat">
+            <div class="analytics-stat-label">総視聴時間</div>
+            <div class="analytics-stat-value">${Math.round(a.watchMinutes || 0).toLocaleString()}分</div>
+          </div>
+          <div class="analytics-stat">
+            <div class="analytics-stat-label">登録者増減</div>
+            <div class="analytics-stat-value" style="color: ${netSubs >= 0 ? 'var(--accent-teal)' : 'var(--danger)'}">
+              ${netSubs >= 0 ? '+' : ''}${netSubs.toLocaleString()}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   function escapeHtml(s) {
     if (s == null) return '';
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
   }
-  
+
   function formatDuration(iso) {
     const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
     if (!m) return iso;
