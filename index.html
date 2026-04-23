@@ -2754,17 +2754,6 @@
   let currentTheme = 'light'; // 'light' or 'dark'
   let memoSidebarCollapsed = false;
 
-  // ===== dirty管理（廃止済み、Firestoreでは不要） =====
-  // 旧Gist同期で使っていたdirty管理。Firestoreではリアルタイム同期のため不要。
-  // 既存コードとの互換性のため、関数はno-opとして残しておく。
-  function markBlockDirty(blockId) { /* no-op */ }
-  function markPageDirty(pageId) { /* no-op */ }
-  function markVideoDirty(videoId) { /* no-op */ }
-  function markCalendarEventDirty(eventId) { /* no-op */ }
-  function clearAllDirty() { /* no-op */ }
-  // dirtyGlobalSettings も互換性のため残す（Firestore時代では意味なし）
-  let dirtyGlobalSettings = false;
-
   // 日本の祝日リスト（簡易版・2025〜2027年分）
   const JP_HOLIDAYS = {
     '2025-01-01': '元日', '2025-01-13': '成人の日', '2025-02-11': '建国記念の日',
@@ -2911,7 +2900,6 @@
       const snap = await docRef.get();
       if (!snap.exists) {
         // 初回：空のドキュメントを作成
-        console.log('[Firestore] 初回作成');
         setSyncStatus('synced', '同期済み ✓');
         return 'empty'; // 初回を示す
       }
@@ -3004,16 +2992,9 @@
     }
     if (firestoreUnsubscribe) firestoreUnsubscribe();
     const docRef = firestoreDb.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC_ID);
-    console.log('[Firestore Listener] 開始');
     firestoreUnsubscribe = docRef.onSnapshot((snap) => {
-      console.log('[Firestore Listener] snapshot受信', {
-        exists: snap.exists,
-        fromCache: snap.metadata.fromCache,
-        hasPendingWrites: snap.metadata.hasPendingWrites
-      });
       // ローカルキャッシュから来た変更は無視(サーバーから来たデータのみ反映)
       if (snap.metadata.hasPendingWrites) {
-        console.log('[Firestore Listener] 自分の書き込み中(pending)、スキップ');
         return;
       }
       if (!snap.exists) return;
@@ -3026,24 +3007,15 @@
         memoPages: data.memoPages
       });
       if (dataJson === firestoreLastSaved) {
-        console.log('[Firestore Listener] 同一データ、スキップ');
         return;
       }
-      
-      console.log('[Firestore Listener] 相方/他クライアントの変更を反映します');
       
       // 編集中のブロックがある場合は保護
       const editingBlockId = getCurrentlyEditingBlockId();
       const localEditingBlock = editingBlockId ? findEditingBlockSnapshot(editingBlockId) : null;
       
-      console.log('[Firestore Listener] 適用前 memoPages数:', memoPages.length,
-                  'channels.ch1.videos数:', channels.ch1.videos.length);
-      
       applyFirestoreData(data);
       firestoreLastSaved = dataJson;
-      
-      console.log('[Firestore Listener] 適用後 memoPages数:', memoPages.length,
-                  'channels.ch1.videos数:', channels.ch1.videos.length);
       
       // 編集中のブロックを復元
       if (editingBlockId && localEditingBlock) {
@@ -3051,7 +3023,6 @@
       }
       
       // ビューを再描画（編集中でも必要な部分は描画、ただしメモで編集中ブロックがあれば慎重に）
-      console.log('[Firestore Listener] 再描画中, currentView:', currentView);
       if (currentView === 'tracker') {
         renderAll();
       } else if (currentView === 'calendar') {
@@ -3061,7 +3032,6 @@
           renderMemoContent();
         } else {
           // 編集中はサイドバーだけ更新（メモ本体は触らない）
-          console.log('[Firestore Listener] メモ編集中、本体は再描画をスキップ');
           renderMemoView();
         }
       }
@@ -3104,21 +3074,6 @@
 
   // ===== マージベースの同期（ポーリング用） =====
   // 相手の変更と自分のローカル変更をブロック単位でマージ
-  // ===== pushToGist を Firestore 用のラッパーに（既存呼び出し互換性保持） =====
-  // 過去のコードは "pushToGist" を多用しているため、関数名はそのまま残して
-  // 内部で Firestore 保存に切り替える
-  async function pushToGist() {
-    if (window.firestoreDb) {
-      return await saveToFirestore();
-    }
-    return false;
-  }
-  // ダミー関数（旧コードの互換性のため）
-  function startPolling() { /* no-op: Firestoreはリアルタイム同期で不要 */ }
-  function stopPolling() { /* no-op */ }
-
-  // 旧Gist衝突解決ロジック（buildSafePayload/mergeBlocksSafe/applyPayloadToLocal）は Phase 2-B で削除
-
   function currentVideos() { return channels[currentChannel].videos; }
   function currentPhases() { return channels[currentChannel].phases; }
 
@@ -3337,9 +3292,8 @@
       phase.start = s;
       phase.end = e;
     }
-    dirtyGlobalSettings = true;
     saveCache();
-    await pushToGist();
+    await saveToFirestore();
     closeGoalModal();
     renderAll();
   });
@@ -3392,18 +3346,15 @@
     channels[currentChannel].videos.push(videoObj);
     channels[currentChannel].videos.sort((a, b) => new Date(a.date) - new Date(b.date));
     ensurePhaseStartDate();
-    markVideoDirty(newVideoId);
     saveCache();
     resetForm();
     addVideoModal.classList.remove('show');
     renderAll();
-    await pushToGist();
+    await saveToFirestore();
   });
 
   async function deleteVideo(id) {
     if (!confirm('この動画を削除する？')) return;
-    // 削除の意図を示すためにdirty化（文字列IDとして保存）
-    markVideoDirty(String(id));
     // 型を問わない比較で削除（数値IDの旧データと文字列IDの新データが混在する可能性あり）
     const before = channels[currentChannel].videos.length;
     channels[currentChannel].videos = currentVideos().filter(v => String(v.id) !== String(id));
@@ -3414,7 +3365,7 @@
     }
     saveCache();
     renderAll();
-    await pushToGist();
+    await saveToFirestore();
   }
 
   // ===== 動画編集モーダル =====
@@ -3481,11 +3432,10 @@
     // 日付でソートし直し
     channels[currentChannel].videos.sort((a, b) => new Date(a.date) - new Date(b.date));
     // 編集した動画をdirty化
-    markVideoDirty(String(editingVideoId));
     saveCache();
     closeEditVideoModal();
     renderAll();
-    await pushToGist();
+    await saveToFirestore();
   });
 
   function startOfDay(d) { const dt = new Date(d); dt.setHours(0, 0, 0, 0); return dt; }
@@ -4456,7 +4406,6 @@
           if (!confirm('この予定を削除しますか？')) return;
           // 削除前にIDをdirty化
           const deletingEvent = calendarEvents[dateStr][idx];
-          if (deletingEvent && deletingEvent.id) markCalendarEventDirty(deletingEvent.id);
           calendarEvents[dateStr].splice(idx, 1);
           if (calendarEvents[dateStr].length === 0) delete calendarEvents[dateStr];
           saveCache();
@@ -4464,7 +4413,7 @@
           const newCell = document.querySelector(`.cal-day[data-date="${dateStr}"]`);
           if (newCell) showDayPopover(newCell, dateStr);
           else hideDayPopover();
-          await pushToGist();
+          await saveToFirestore();
         });
         eventsList.appendChild(item);
       });
@@ -4524,7 +4473,6 @@
       emoji: icon.emoji,
       name: icon.name
     });
-    markCalendarEventDirty(newEventId);
     saveCache();
     renderCalendar();
     // ポップオーバーを再表示（カレンダー再描画でセルが新しくなるので探し直し）
@@ -4533,7 +4481,7 @@
       newCell.classList.add('selected');
       showDayPopover(newCell, dateStr);
     }
-    await pushToGist();
+    await saveToFirestore();
   }
 
   // アイコン編集モーダル
@@ -4589,11 +4537,10 @@
         if (iconTypes.length <= 1) { alert('最後の1つは削除できません'); return; }
         if (!confirm('このアイコンを削除しますか？\n（登録済みの予定はそのまま残ります）')) return;
         iconTypes.splice(idx, 1);
-        dirtyGlobalSettings = true;
         saveCache();
         renderIconsManager();
         renderCalendar();
-        await pushToGist();
+        await saveToFirestore();
       });
       list.appendChild(item);
     });
@@ -4627,19 +4574,16 @@
           if (ev.emoji === oldIcon.emoji && ev.name === oldIcon.name) {
             ev.emoji = newEmoji;
             ev.name = newName;
-            if (ev.id) markCalendarEventDirty(ev.id);
           }
         });
       });
     }
     // iconTypes変更を同期に反映させるためフラグON
-    dirtyGlobalSettings = true;
-    
     saveCache();
     closeIconEditModal();
     renderIconsManager();
     renderCalendar();
-    await pushToGist();
+    await saveToFirestore();
   });
 
   // 個別予定編集モーダル
@@ -4675,8 +4619,6 @@
     } else {
       ev.name = newName;
     }
-    if (ev.id) markCalendarEventDirty(ev.id);
-    
     saveCache();
     closeEventEditModal();
     renderCalendar();
@@ -4685,7 +4627,7 @@
       cell.classList.add('selected');
       showDayPopover(cell, dateStr);
     }
-    await pushToGist();
+    await saveToFirestore();
   });
 
   // ===== ダークモード =====
@@ -5085,21 +5027,18 @@
         currentMemoPageId = page.id;
         saveSettings();
         renderMemoView();
-        // ページ切替時に最新状態をfetch
-        // pollingSyncは廃止（Firestoreリアルタイム同期のため）
       });
       item.querySelector('.memo-page-delete').addEventListener('click', async (e) => {
         e.stopPropagation();
         if (!confirm(`「${page.name}」を削除しますか？`)) return;
         // ページ削除の意図を示すためdirty化
-        markPageDirty(page.id);
         memoPages = memoPages.filter(p => p.id !== page.id);
         if (currentMemoPageId === page.id) {
           currentMemoPageId = memoPages.length > 0 ? memoPages[0].id : null;
         }
         saveCache();
         renderMemoView();
-        await pushToGist();
+        await saveToFirestore();
       });
       list.appendChild(item);
     });
@@ -5110,7 +5049,6 @@
     memoPages.push(page);
     currentMemoPageId = page.id;
     // 新規追加ページをdirty化
-    markPageDirty(page.id);
     saveCache();
     saveSettings();
     renderMemoView();
@@ -5118,7 +5056,7 @@
       const titleInput = document.querySelector('.memo-page-title-input');
       if (titleInput) { titleInput.focus(); titleInput.select(); }
     }, 50);
-    await pushToGist();
+    await saveToFirestore();
   });
 
   // サイドバー切替
@@ -5170,10 +5108,9 @@
       if (newEmoji && newEmoji.trim()) {
         page.emoji = newEmoji.trim();
         page.updatedAt = new Date().toISOString();
-        markPageDirty(page.id);
         saveCache();
         renderMemoView();
-        await pushToGist();
+        await saveToFirestore();
       }
     });
     titleWrap.appendChild(emojiBtn);
@@ -5187,12 +5124,11 @@
     const handleTitleChange = () => {
       page.name = titleInput.value;
       page.updatedAt = new Date().toISOString();
-      markPageDirty(page.id);
       clearTimeout(titleSaveTimer);
       titleSaveTimer = setTimeout(async () => {
         saveCache();
         renderMemoSidebar();
-        await pushToGist();
+        await saveToFirestore();
       }, 600);
     };
     titleInput.addEventListener('input', handleTitleChange);
@@ -5285,18 +5221,14 @@
     }
     
     page.updatedAt = new Date().toISOString();
-    markPageDirty(page.id);
-    
-    // コピーした全ブロック（子孫含む）をdirty化
     function markAllIds(b) {
-      if (b.id) markBlockDirty(b.id);
       if (b.type === 'toggle' && b.children) b.children.forEach(markAllIds);
     }
     markAllIds(newBlock);
     
     saveCache();
     renderMemoContent();
-    pushToGist();
+    saveToFirestore();
   }
 
   function addNewBlock(type, parentArray = null) {
@@ -5326,16 +5258,11 @@
     (parentArray || page.blocks).push(block);
     page.updatedAt = new Date().toISOString();
     // 追加したブロックだけをdirty化（他のブロックは触ってないので上書きしない）
-    markPageDirty(page.id);
-    markBlockDirty(block.id);
-    // 【重要】直前まで編集していたブロックも dirty化を保持するため、
-    // ここで全ブロックの更新日時をチェックし、最近編集された（1秒以内）ブロックも dirty化
     const now = Date.now();
     function markRecentEdited(blocks) {
       blocks.forEach(b => {
         if (b.id && b.updatedAt) {
           const diff = now - new Date(b.updatedAt).getTime();
-          if (diff < 2000) markBlockDirty(b.id); // 2秒以内に編集されたブロック
         }
         if (b.type === 'toggle' && b.children) markRecentEdited(b.children);
       });
@@ -5350,7 +5277,7 @@
       const el = root.querySelector('[contenteditable="true"], input[type="text"], textarea');
       if (el) el.focus();
     }, 50);
-    pushToGist();
+    saveToFirestore();
   }
 
   // scheduleSaveの保留タイマーを即時実行
@@ -5358,7 +5285,6 @@
     if (saveTimer) {
       clearTimeout(saveTimer);
       saveTimer = null;
-      // saveCacheだけ即実行（pushToGistはaddNewBlock側で呼ばれるので不要）
       const page = getCurrentMemoPage();
       if (page) page.updatedAt = new Date().toISOString();
       saveCache();
@@ -5373,9 +5299,6 @@
       const evt = new Event('input', { bubbles: true });
       active.dispatchEvent(evt);
     }
-    // ⚠️ 以前は全contentEditableにinputを発火していたが、
-    // それが原因でdirtyBlockIdsが肥大化→削除済みブロックが復活するバグが発生
-    // 現在はactiveな要素だけに限定
   }
 
   function renderBlock(block, parentArray) {
@@ -5437,9 +5360,7 @@
         pushHistory();
         block.checked = cb.checked;
         editor.el.classList.toggle('checked', cb.checked);
-        if (block.id) markBlockDirty(block.id);
         const page = getCurrentMemoPage();
-        if (page) markPageDirty(page.id);
         block.updatedAt = new Date().toISOString();
         scheduleSave();
       });
@@ -5483,9 +5404,7 @@
       titleInput.addEventListener('input', () => {
         block.title = titleInput.value;
         // 即dirty化（scheduleSaveのタイマー待ちで消えるのを防ぐ）
-        markBlockDirty(block.id);
         const page = getCurrentMemoPage();
-        if (page) markPageDirty(page.id);
         block.updatedAt = new Date().toISOString();
         scheduleSave();
       });
@@ -5702,9 +5621,7 @@
       requestAnimationFrame(() => autoResizeTextarea(codeInput));
       codeInput.addEventListener('input', () => {
         block.content = codeInput.value;
-        if (block.id) markBlockDirty(block.id);
         const page = getCurrentMemoPage();
-        if (page) markPageDirty(page.id);
         block.updatedAt = new Date().toISOString();
         autoResizeTextarea(codeInput);
         scheduleSave();
@@ -5771,18 +5688,14 @@
       if (page) {
         page.updatedAt = new Date().toISOString();
         // 削除されたブロックIDもdirty化（削除の意図を示す）
-        markBlockDirty(block.id);
-        markPageDirty(page.id);
-        // 再帰的にすべての子孫IDもdirty化（trialceに入ってたブロックの削除も伝える）
         function markDescendants(b) {
-          if (b.id) markBlockDirty(b.id);
           if (b.type === 'toggle' && b.children) b.children.forEach(markDescendants);
         }
         markDescendants(block);
       }
       saveCache();
       renderMemoContent();
-      pushToGist();
+      saveToFirestore();
     });
     actions.appendChild(deleteBtn);
     wrap.appendChild(actions);
@@ -5855,7 +5768,7 @@
     markAllBlocksInPageDirty(page);
     saveCache();
     renderMemoContent();
-    pushToGist();
+    saveToFirestore();
   }
 
   // ブロックを指定配列の末尾に移動（トグル内へのドロップ用）
@@ -5877,7 +5790,7 @@
     markAllBlocksInPageDirty(page);
     saveCache();
     renderMemoContent();
-    pushToGist();
+    saveToFirestore();
   }
 
   // toggleBlockの子孫にidを持つブロックがあるかチェック
@@ -5921,8 +5834,6 @@
         const found = findBlockAndParent(page.blocks, editingBlockId);
         if (found) {
           found.block.updatedAt = new Date().toISOString();
-          markBlockDirty(editingBlockId);
-          markPageDirty(page.id);
         }
       }
     }
@@ -5931,17 +5842,15 @@
       const page = getCurrentMemoPage();
       if (page) page.updatedAt = new Date().toISOString();
       saveCache();
-      await pushToGist();
+      await saveToFirestore();
     }, 800);
   }
 
   // 全ブロックをdirty化（構造変更時用: ブロック追加・削除・移動）
   function markAllBlocksInPageDirty(page) {
     if (!page) return;
-    markPageDirty(page.id);
     function recurse(blocks) {
       blocks.forEach(b => {
-        if (b.id) markBlockDirty(b.id);
         if (b.type === 'toggle' && b.children) recurse(b.children);
       });
     }
@@ -6036,9 +5945,7 @@
       // プレーンテキスト版も保持（後方互換・検索用）
       block[field] = el.textContent;
       // 即dirty化（scheduleSaveのタイマー待ちで消えるのを防ぐ）
-      if (block.id) markBlockDirty(block.id);
       const page = getCurrentMemoPage();
-      if (page) markPageDirty(page.id);
       block.updatedAt = new Date().toISOString();
       updatePlaceholder();
       scheduleSave();
@@ -6218,7 +6125,7 @@
     const prev = historyStack.pop();
     if (current) redoStack.push(current);
     applySnapshot(prev);
-    await pushToGist();
+    await saveToFirestore();
   }
 
   async function redo() {
@@ -6227,7 +6134,7 @@
     const next = redoStack.pop();
     if (current) historyStack.push(current);
     applySnapshot(next);
-    await pushToGist();
+    await saveToFirestore();
   }
 
   // Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z を監視
@@ -6286,7 +6193,7 @@
       saveCache();
       renderMemoContent();
       pendingImageBlock = null;
-      await pushToGist();
+      await saveToFirestore();
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -6580,12 +6487,9 @@
     // （ギャラリー内のサブ画像も、最終的にはルートブロックの中のデータなので、ルートのdirtyで十分）
     const rootBlock = imageDetailStack.length > 0 ? imageDetailStack[0] : editingImageBlock;
     if (rootBlock && rootBlock.id) {
-      markBlockDirty(rootBlock.id);
       rootBlock.updatedAt = new Date().toISOString();
     }
     const page = getCurrentMemoPage();
-    if (page) markPageDirty(page.id);
-    
     clearTimeout(imageDetailSaveTimer);
     imageDetailSaveTimer = setTimeout(async () => {
       if (page) page.updatedAt = new Date().toISOString();
@@ -6596,7 +6500,7 @@
       if (editingImageBlock) {
         document.getElementById('imageDetailModal').classList.add('show');
       }
-      await pushToGist();
+      await saveToFirestore();
     }, 600);
   }
 
