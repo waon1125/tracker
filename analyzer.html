@@ -166,9 +166,9 @@
   .color-swatch span { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--card-border); }
   .color-swatch.active { box-shadow: 0 0 0 3px var(--accent-pink), 2px 2px 0 var(--shadow); }
   
-  .analytics-stat { padding: 8px 10px; background: var(--card-bg); border: 1.5px solid var(--card-border); border-radius: 8px; text-align: center; }
+  .analytics-stat { padding: 8px 10px; background: var(--card-bg); border: 2px solid var(--card-border); border-radius: 8px; text-align: center; }
   .analytics-stat-label { font-size: 10px; color: var(--text-muted); font-weight: 700; }
-  .analytics-stat-value { font-size: 18px; font-weight: 900; color: var(--accent-pink); margin-top: 2px; }
+  .analytics-stat-value { font-size: 20px; font-weight: 900; color: var(--text); margin-top: 4px; line-height: 1.2; }
 </style>
 </head>
 <body>
@@ -773,9 +773,10 @@
             return;
           }
           if (vids.length === 0) { alert('動画が登録されていません'); return; }
-          if (!confirm(`${vids.length}本の動画の詳細データ（維持率・CTR等）を取得します。\n⚠️ 自分のチャンネルかつOAuth認証済みの場合のみ動作します。`)) return;
+          if (!confirm(`${vids.length}本の動画の詳細データ（維持率等）を取得します。\n⚠️ 自分のチャンネルかつOAuth認証済みの場合のみ動作します。`)) return;
           analyticsBtn.disabled = true; analyticsBtn.textContent = '⏳ 取得中... (0/' + vids.length + ')';
           let ok = 0, fail = 0;
+          const errors = [];
           for (let i = 0; i < vids.length; i++) {
             const v = vids[i];
             try {
@@ -788,19 +789,31 @@
                 ok++;
               } else {
                 fail++;
+                errors.push(`・${v.title.slice(0, 30)}: データなし（投稿直後の可能性）`);
               }
             } catch (err) {
               console.error(`[Analytics] ${v.videoId}:`, err);
               fail++;
+              errors.push(`・${v.title.slice(0, 30)}: ${err.message}`);
+              // OAuth期限切れなら中断
+              if (err.message.includes('401') || err.message.includes('Unauthorized') || err.message.includes('invalid_token')) {
+                errors.push('⚠️ OAuth認証が切れました。⚙️設定から再連携してください。');
+                break;
+              }
             }
             analyticsBtn.textContent = '⏳ 取得中... (' + (i+1) + '/' + vids.length + ')';
             // API レート制限対策で少し待つ
-            await new Promise(r => setTimeout(r, 150));
+            await new Promise(r => setTimeout(r, 300));
           }
           await saveFirestoreData();
           renderAll();
           analyticsBtn.disabled = false; analyticsBtn.textContent = '📊 詳細データ一斉取得';
-          alert(`✅ 取得完了\n成功: ${ok}本\n失敗: ${fail}本（データ未反映の新着動画等）`);
+          let msg = `✅ 取得完了\n成功: ${ok}本\n失敗: ${fail}本`;
+          if (errors.length > 0) {
+            msg += '\n\n【エラー詳細】\n' + errors.slice(0, 10).join('\n');
+            if (errors.length > 10) msg += `\n...他${errors.length - 10}件`;
+          }
+          alert(msg);
         });
       }
       attachVideoListHandlers(container);
