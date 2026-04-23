@@ -2719,7 +2719,6 @@
 <script>
   const CHANNEL_EMOJIS = ['🌙', '🍁'];
   const DEFAULT_PHASE = { start: 3500, end: 17500, startDate: null };
-  const GIST_FILENAME = 'initial_views_tracker_data.json';
 
   let channels = {
     ch1: { name: 'チャンネル1', videos: [], phases: [{ ...DEFAULT_PHASE }] },
@@ -2735,7 +2734,6 @@
   let editingPhaseIdx = null;
   let editingNewPhase = false;
   let lastSyncTime = null;
-  let syncInProgress = false;
 
   // ===== カレンダー機能 =====
   let currentView = 'tracker'; // 'tracker' or 'calendar'
@@ -2756,37 +2754,16 @@
   let currentTheme = 'light'; // 'light' or 'dark'
   let memoSidebarCollapsed = false;
 
-  // このセッション中にユーザーが編集したブロックIDのセット（安全なpush用）
-  // サーバー側のデータをpushで上書きしないため、自分が触ったものだけを「最新」として扱う
-  const dirtyBlockIds = new Set();
-  // ページ単位の編集セット（ページ自体の追加/削除/タイトル変更用）
-  const dirtyPageIds = new Set();
-  // トラッカー側 動画記録のdirty（videoId）
-  const dirtyVideoIds = new Set();
-  // カレンダーイベント側のdirty（eventId）
-  const dirtyCalendarEventIds = new Set();
-  // 設定（iconTypes, phases）の変更フラグ
+  // ===== dirty管理（廃止済み、Firestoreでは不要） =====
+  // 旧Gist同期で使っていたdirty管理。Firestoreではリアルタイム同期のため不要。
+  // 既存コードとの互換性のため、関数はno-opとして残しておく。
+  function markBlockDirty(blockId) { /* no-op */ }
+  function markPageDirty(pageId) { /* no-op */ }
+  function markVideoDirty(videoId) { /* no-op */ }
+  function markCalendarEventDirty(eventId) { /* no-op */ }
+  function clearAllDirty() { /* no-op */ }
+  // dirtyGlobalSettings も互換性のため残す（Firestore時代では意味なし）
   let dirtyGlobalSettings = false;
-
-  function markBlockDirty(blockId) {
-    if (blockId) dirtyBlockIds.add(blockId);
-  }
-  function markPageDirty(pageId) {
-    if (pageId) dirtyPageIds.add(pageId);
-  }
-  function markVideoDirty(videoId) {
-    if (videoId !== undefined && videoId !== null) dirtyVideoIds.add(String(videoId));
-  }
-  function markCalendarEventDirty(eventId) {
-    if (eventId) dirtyCalendarEventIds.add(eventId);
-  }
-  function clearAllDirty() {
-    dirtyBlockIds.clear();
-    dirtyPageIds.clear();
-    dirtyVideoIds.clear();
-    dirtyCalendarEventIds.clear();
-    dirtyGlobalSettings = false;
-  }
 
   // 日本の祝日リスト（簡易版・2025〜2027年分）
   const JP_HOLIDAYS = {
@@ -3140,292 +3117,7 @@
   function startPolling() { /* no-op: Firestoreはリアルタイム同期で不要 */ }
   function stopPolling() { /* no-op */ }
 
-  // ===== GitHub Gist: データ保存（旧版、フォールバック用） =====
-  function buildSafePayload(serverData) {
-    const result = {
-      channels: { ch1: {}, ch2: {} },
-      calendarEvents: {},
-      iconTypes: [],
-      memoPages: []
-    };
-
-    // --- channels ---
-    ['ch1', 'ch2'].forEach(k => {
-      const serverCh = (serverData.channels && serverData.channels[k]) || {};
-      const localCh = channels[k] || {};
-      
-      // 名前はローカル優先（手動変更用）だが、設定dirtyでなければサーバーに合わせる
-      result.channels[k] = {
-        name: dirtyGlobalSettings ? (localCh.name || serverCh.name) : (serverCh.name || localCh.name),
-        videos: mergeVideosSafe(localCh.videos || [], serverCh.videos || []),
-        phases: dirtyGlobalSettings ? (localCh.phases || serverCh.phases || []) : (serverCh.phases || localCh.phases || [])
-      };
-    });
-
-    // --- calendarEvents ---
-    // サーバーをベースに、dirtyなイベントIDは自分のを採用、自分にだけ新しいIDがあれば追加
-    const serverCal = serverData.calendarEvents || {};
-    const localCal = calendarEvents || {};
-    const allDates = new Set([...Object.keys(serverCal), ...Object.keys(localCal)]);
-    allDates.forEach(date => {
-      const serverEvents = serverCal[date] || [];
-      const localEvents = localCal[date] || [];
-      const merged = mergeCalendarEventsSafe(localEvents, serverEvents);
-      if (merged.length > 0) result.calendarEvents[date] = merged;
-    });
-
-    // --- iconTypes ---
-    result.iconTypes = dirtyGlobalSettings ? iconTypes : (serverData.iconTypes || iconTypes);
-
-    // --- memoPages ---
-    const serverPages = serverData.memoPages || [];
-    const localPages = memoPages || [];
-    result.memoPages = mergeMemoPagesSafe(localPages, serverPages);
-
-    return result;
-  }
-
-  // 動画をサーバーベースで安全にマージ
-  function mergeVideosSafe(localVideos, serverVideos) {
-    const serverMap = new Map(serverVideos.filter(v => v.id).map(v => [v.id, v]));
-    const localMap = new Map(localVideos.filter(v => v.id).map(v => [v.id, v]));
-    const result = [];
-    const usedIds = new Set();
-    
-    // サーバーの全動画をベースに
-    serverVideos.forEach(sv => {
-      if (!sv.id) {
-        // 古いデータ（ID無し）はそのまま通す
-        result.push(sv);
-        return;
-      }
-      usedIds.add(sv.id);
-      const lv = localMap.get(sv.id);
-      // dirtyならローカルを採用、そうでなければサーバーを採用
-      if (dirtyVideoIds.has(String(sv.id)) && lv) {
-        result.push(lv);
-      } else if (dirtyVideoIds.has(String(sv.id)) && !lv) {
-        // サーバーにあるがローカルに無く、自分のdirtyにある = 自分が削除した
-        // pushの時点で除外（追加しない）
-      } else if (lv) {
-        // dirty以外はサーバーを採用（ローカルの古いキャッシュを捨てる）
-        result.push(sv);
-      } else {
-        result.push(sv);
-      }
-    });
-    // ローカルにだけある新規（dirty）を追加
-    localVideos.forEach(lv => {
-      if (lv.id && !usedIds.has(lv.id) && dirtyVideoIds.has(String(lv.id))) {
-        result.push(lv);
-        usedIds.add(lv.id);
-      }
-    });
-    // ID無いローカル動画（旧データ）
-    localVideos.forEach(lv => {
-      if (!lv.id) result.push(lv);
-    });
-    return result.sort((a, b) => new Date(a.date) - new Date(b.date));
-  }
-
-  // カレンダーイベント安全マージ
-  function mergeCalendarEventsSafe(localEvents, serverEvents) {
-    const result = [];
-    const usedIds = new Set();
-    
-    serverEvents.forEach(se => {
-      if (!se.id) { result.push(se); return; }
-      usedIds.add(se.id);
-      const le = localEvents.find(x => x.id === se.id);
-      if (dirtyCalendarEventIds.has(se.id) && le) {
-        result.push(le);
-      } else if (le) {
-        result.push(se);
-      } else {
-        result.push(se);
-      }
-    });
-    // ローカル新規（dirty）
-    localEvents.forEach(le => {
-      if (le.id && !usedIds.has(le.id) && dirtyCalendarEventIds.has(le.id)) {
-        result.push(le);
-      }
-    });
-    // dirty判定できない削除ケース: ローカルに無くサーバーにあるけどdirty指定されている場合
-    // → これは「自分が削除した」ケースなので、dirtyCalendarEventIdsにIDがあるがlocalに無い
-    //   その場合はresultから除外する
-    return result.filter(ev => {
-      // サーバーにあって、自分はdirtyで削除している → 除外
-      if (ev.id && dirtyCalendarEventIds.has(ev.id) && !localEvents.find(x => x.id === ev.id)) {
-        return false;
-      }
-      return true;
-    });
-  }
-
-  // メモページ安全マージ
-  function mergeMemoPagesSafe(localPages, serverPages) {
-    const result = [];
-    const usedIds = new Set();
-    const localMap = new Map(localPages.filter(p => p.id).map(p => [p.id, p]));
-    
-    // サーバーのページをベースに
-    serverPages.forEach(sp => {
-      if (!sp.id) { result.push(sp); return; }
-      usedIds.add(sp.id);
-      const lp = localMap.get(sp.id);
-      
-      // ページ自体がdirty（タイトル等変更）で、ローカルにある
-      if (dirtyPageIds.has(sp.id) && lp) {
-        // ブロックだけ再帰マージ
-        const mergedBlocks = mergeBlocksSafe(lp.blocks || [], sp.blocks || []);
-        result.push({
-          ...sp,
-          name: lp.name,
-          emoji: lp.emoji,
-          updatedAt: lp.updatedAt,
-          blocks: mergedBlocks
-        });
-      } else if (lp) {
-        // ページ自体は触ってないが、ブロックは触ってる可能性
-        const mergedBlocks = mergeBlocksSafe(lp.blocks || [], sp.blocks || []);
-        result.push({
-          ...sp, // サーバーのタイトル等を使う
-          blocks: mergedBlocks
-        });
-      } else {
-        // ローカルには無いページ（相手が追加、自分は取り込めていない）
-        result.push(sp);
-      }
-    });
-    
-    // ローカルにだけある新規ページ（自分が追加、dirtyPageIds.has）
-    localPages.forEach(lp => {
-      if (lp.id && !usedIds.has(lp.id) && dirtyPageIds.has(lp.id)) {
-        result.push(lp);
-      }
-    });
-    
-    // 削除ケース: サーバーにあって、自分はdirtyだがlocalに無い → 削除
-    return result.filter(p => {
-      if (p.id && dirtyPageIds.has(p.id) && !localMap.has(p.id)) {
-        return false;
-      }
-      return true;
-    });
-  }
-
-  // ブロック安全マージ
-  // サーバーをベースに、dirtyなブロックは自分のを採用、それ以外はサーバーのを維持
-  // 新規追加・削除もdirtyベースで判定
-  function mergeBlocksSafe(localBlocks, serverBlocks) {
-    const result = [];
-    const usedIds = new Set();
-    const localMap = new Map();
-    localBlocks.forEach(b => { if (b.id) localMap.set(b.id, b); });
-    
-    // ローカルの並び順を優先する戦略：
-    // dirtyなブロックを含むページなら、ローカルの順序を採用
-    // そうでなければサーバーの順序
-    const hasAnyLocalDirty = localBlocks.some(b => b.id && dirtyBlockIds.has(b.id));
-    
-    const baseBlocks = hasAnyLocalDirty ? localBlocks : serverBlocks;
-    const otherMap = new Map();
-    (hasAnyLocalDirty ? serverBlocks : localBlocks).forEach(b => {
-      if (b.id) otherMap.set(b.id, b);
-    });
-    
-    baseBlocks.forEach(b => {
-      if (!b.id) { result.push(b); return; }
-      usedIds.add(b.id);
-      
-      if (hasAnyLocalDirty) {
-        // localをベースにしている
-        const lb = b;
-        const sb = otherMap.get(b.id); // サーバーの対応
-        
-        if (dirtyBlockIds.has(b.id)) {
-          // 自分が触った → 自分のを採用。ただしtoggleは子を再帰マージ
-          if (lb.type === 'toggle' && sb && sb.type === 'toggle') {
-            result.push({
-              ...lb,
-              children: mergeBlocksSafe(lb.children || [], sb.children || [])
-            });
-          } else {
-            result.push(lb);
-          }
-        } else if (sb) {
-          // 自分は触ってない → サーバーのを採用（相手が編集した可能性）
-          // toggleは子を再帰マージ
-          if (lb.type === 'toggle' && sb.type === 'toggle') {
-            result.push({
-              ...sb,
-              children: mergeBlocksSafe(lb.children || [], sb.children || [])
-            });
-          } else {
-            result.push(sb);
-          }
-        } else {
-          // サーバーに無い → 自分が新規追加 or 相手が削除
-          // dirtyなら自分の追加として維持、そうでなければ削除
-          if (dirtyBlockIds.has(b.id)) {
-            result.push(lb);
-          }
-          // dirtyでなければ相手の削除を受け入れる = resultに追加しない
-        }
-      } else {
-        // サーバーをベースにしている（自分は何も触ってない）
-        const sb = b;
-        const lb = otherMap.get(b.id);
-        if (lb && lb.type === 'toggle' && sb.type === 'toggle') {
-          // toggleの中だけマージ
-          result.push({
-            ...sb,
-            children: mergeBlocksSafe(lb.children || [], sb.children || [])
-          });
-        } else {
-          result.push(sb);
-        }
-      }
-    });
-    
-    // baseにない相手のブロック（もう片方にだけあるもの）
-    if (hasAnyLocalDirty) {
-      // localをベースにしたので、serverにだけある = 相手が追加
-      serverBlocks.forEach(sb => {
-        if (sb.id && !usedIds.has(sb.id) && !dirtyBlockIds.has(sb.id)) {
-          // 相手が追加したもの → 自分は削除してないので追加する
-          result.push(sb);
-          usedIds.add(sb.id);
-        }
-      });
-    }
-    
-    return result;
-  }
-
-  // マージ結果のpayloadをローカル状態に反映
-  function applyPayloadToLocal(payload) {
-    if (payload.channels) {
-      ['ch1', 'ch2'].forEach(k => {
-        if (payload.channels[k]) {
-          channels[k] = {
-            name: payload.channels[k].name || channels[k].name,
-            videos: payload.channels[k].videos || [],
-            phases: payload.channels[k].phases || [{ ...DEFAULT_PHASE }]
-          };
-        }
-      });
-    }
-    if (payload.calendarEvents) calendarEvents = payload.calendarEvents;
-    if (payload.iconTypes && Array.isArray(payload.iconTypes) && payload.iconTypes.length > 0) {
-      iconTypes = payload.iconTypes;
-    }
-    if (payload.memoPages && Array.isArray(payload.memoPages)) {
-      memoPages = payload.memoPages;
-    }
-    saveCache();
-  }
+  // 旧Gist衝突解決ロジック（buildSafePayload/mergeBlocksSafe/applyPayloadToLocal）は Phase 2-B で削除
 
   function currentVideos() { return channels[currentChannel].videos; }
   function currentPhases() { return channels[currentChannel].phases; }
