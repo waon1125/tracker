@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YouTube成長分析</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+  // Firebase設定（トラッカーと同じプロジェクト）
+  const firebaseConfig = {
+    apiKey: "AIzaSyCcE-y_spXxhFDU5B56zaOGGAQMhz7lo-I",
+    authDomain: "tracker-8f900.firebaseapp.com",
+    projectId: "tracker-8f900",
+    storageBucket: "tracker-8f900.firebasestorage.app",
+    messagingSenderId: "1013536609350",
+    appId: "1:1013536609350:web:3bf98f11bfce0ae0fce647"
+  };
+  const ALLOWED_EMAILS = [
+    'waon.games.waon@gmail.com',
+    'c5ykykc5@gmail.com'
+  ];
+  // ⚠️ ここにYouTube Data API v3のキーを貼り付けてください
+const YOUTUBE_API_KEY = 'AIzaSyCcE-y_spXxhFDU5B56zaOGGAQMhz7lo-I';
+  
+  firebase.initializeApp(firebaseConfig);
+  const firestoreDb = firebase.firestore();
+  const firebaseAuth = firebase.auth();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #fff5e1;
+    --text: #2d2d2d;
+    --text-muted: #555;
+    --text-faint: #999;
+    --card-bg: #fff;
+    --card-border: #2d2d2d;
+    --shadow: rgba(0,0,0,0.15);
+    --accent-pink: #ff6b9d;
+    --accent-teal: #4ecdc4;
+    --accent-yellow: #ffd93d;
+    --accent-blue: #6bb5ff;
+    --accent-light-yellow: #fff5b0;
+    --danger: #e74c3c;
+    --danger-bg: #ffe5e5;
+    --input-bg: #fffbee;
+    --input-focus-bg: #fff;
+    --section-dashed: #c8a97e;
+    --dim-bg: #f5ebd5;
+    --on-accent: #fff;
+  }
+  [data-theme="dark"] {
+    --bg: #1a1a2e;
+    --text: #e8e8ea;
+    --text-muted: #b0b0ba;
+    --text-faint: #7a7a85;
+    --card-bg: #2a2a3e;
+    --card-border: #4a4a5e;
+    --shadow: rgba(0,0,0,0.4);
+    --input-bg: #1f1f33;
+    --input-focus-bg: #242438;
+    --dim-bg: #222233;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    margin: 0; padding: 20px;
+    min-height: 100vh;
+  }
+  .container {
+    max-width: 1200px; margin: 0 auto;
+  }
+  .page-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 3px solid var(--card-border);
+  }
+  .page-title {
+    font-size: 28px; font-weight: 900;
+    margin: 0;
+  }
+  .nav-links { display: flex; gap: 12px; align-items: center; }
+  .nav-link {
+    padding: 8px 14px;
+    background: var(--card-bg); color: var(--text);
+    border: 2px solid var(--card-border);
+    border-radius: 10px;
+    box-shadow: 3px 3px 0 var(--shadow);
+    text-decoration: none;
+    font-weight: 700; font-size: 13px;
+    transition: all 0.15s;
+  }
+  .nav-link:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0 var(--shadow);
+  }
+  
+  /* ==== ログイン画面 ==== */
+  .login-screen {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    z-index: 100000;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .login-screen.hidden { display: none; }
+  .login-card {
+    background: var(--card-bg);
+    border: 4px solid var(--card-border);
+    border-radius: 24px;
+    box-shadow: 8px 8px 0 var(--shadow);
+    padding: 48px 36px;
+    max-width: 440px; width: 100%;
+    text-align: center;
+  }
+  .login-emoji { font-size: 64px; }
+  .login-title { font-size: 26px; font-weight: 900; margin: 8px 0; }
+  .login-subtitle { font-size: 14px; color: var(--text-muted); margin: 0 0 32px; }
+  .login-btn-google {
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    width: 100%; background: #fff; color: #3c4043;
+    border: 3px solid #2d2d2d; border-radius: 14px;
+    padding: 14px 20px; font-size: 15px; font-weight: 700;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    cursor: pointer; box-shadow: 4px 4px 0 var(--shadow);
+    transition: all 0.15s;
+  }
+  .login-btn-google:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 var(--shadow); }
+  .login-error { margin: 16px 0 0; padding: 12px;
+    background: var(--danger-bg); color: var(--danger);
+    border: 2px solid var(--danger); border-radius: 10px;
+    font-size: 13px; font-weight: 700; }
+  .login-error.hidden { display: none; }
+  .login-hint { margin-top: 24px; font-size: 11px; color: var(--text-faint); }
+
+  /* ==== APIキー未設定警告 ==== */
+  .api-key-warning {
+    background: #ffe5e5; border: 3px solid var(--danger);
+    border-radius: 12px; padding: 16px;
+    margin-bottom: 20px; color: var(--danger);
+    font-weight: 700;
+  }
+  .api-key-warning.hidden { display: none; }
+
+  /* ==== セクション共通 ==== */
+  .section {
+    background: var(--card-bg);
+    border: 3px solid var(--card-border);
+    border-radius: 16px;
+    box-shadow: 5px 5px 0 var(--shadow);
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .section-title {
+    font-size: 18px; font-weight: 900;
+    margin: 0 0 16px; display: flex; gap: 8px; align-items: center;
+  }
+  
+  /* ==== チャンネル登録 ==== */
+  .channel-registration {
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    margin-bottom: 12px;
+  }
+  .input-field {
+    flex: 1; min-width: 240px;
+    padding: 10px 14px;
+    border: 2px solid var(--card-border);
+    border-radius: 10px;
+    background: var(--input-bg);
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-size: 14px; font-weight: 600;
+  }
+  .input-field:focus {
+    outline: none; background: var(--input-focus-bg);
+    box-shadow: 0 0 0 3px var(--accent-yellow);
+  }
+  .btn {
+    padding: 10px 18px;
+    border: 2px solid var(--card-border);
+    border-radius: 10px;
+    background: var(--accent-yellow); color: var(--text);
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-size: 13px; font-weight: 800;
+    cursor: pointer;
+    box-shadow: 3px 3px 0 var(--shadow);
+    transition: all 0.15s;
+  }
+  .btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--shadow); }
+  .btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--shadow); }
+  .btn-primary { background: var(--accent-pink); color: var(--on-accent); }
+  .btn-success { background: var(--accent-teal); color: var(--on-accent); }
+  .btn-ghost { background: transparent; }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+  
+  .channel-list { display: flex; flex-wrap: wrap; gap: 8px; }
+  .channel-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; 
+    background: var(--dim-bg);
+    border: 2px solid var(--card-border);
+    border-radius: 20px;
+    font-size: 13px; font-weight: 700;
+  }
+  .channel-chip-remove {
+    border: none; background: transparent;
+    cursor: pointer; color: var(--danger);
+    font-size: 14px; padding: 0 2px;
+  }
+  
+  /* ==== 動画一覧 ==== */
+  .video-controls {
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    margin-bottom: 16px;
+  }
+  .video-list {
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .video-card {
+    display: flex; gap: 14px;
+    padding: 12px;
+    background: var(--dim-bg);
+    border: 2px solid var(--card-border);
+    border-radius: 12px;
+  }
+  .video-thumb {
+    width: 160px; height: 90px;
+    background: #000; border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+  .video-info { flex: 1; min-width: 0; }
+  .video-title {
+    font-weight: 800; font-size: 14px;
+    margin: 0 0 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .video-meta {
+    font-size: 12px; color: var(--text-muted);
+    margin: 2px 0;
+  }
+  .video-stats {
+    display: flex; gap: 12px; flex-wrap: wrap;
+    margin-top: 6px;
+  }
+  .video-stat {
+    font-size: 12px; font-weight: 700;
+    padding: 2px 8px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+  }
+  .video-actions {
+    display: flex; flex-direction: column; gap: 4px;
+    flex-shrink: 0;
+  }
+  
+  /* ==== ダッシュボード ==== */
+  .dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--dim-bg);
+    border: 2px solid var(--card-border);
+    border-radius: 12px;
+    padding: 14px;
+    text-align: center;
+  }
+  .stat-label {
+    font-size: 11px; color: var(--text-muted);
+    font-weight: 700;
+  }
+  .stat-value {
+    font-size: 24px; font-weight: 900;
+    color: var(--accent-pink);
+    margin: 4px 0;
+  }
+  .stat-sub {
+    font-size: 11px; color: var(--text-faint);
+  }
+  
+  /* ==== 動画詳細モーダル ==== */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    z-index: 1000;
+    display: none; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--card-bg);
+    border: 4px solid var(--card-border);
+    border-radius: 20px;
+    box-shadow: 8px 8px 0 var(--shadow);
+    max-width: 900px; width: 100%;
+    max-height: 90vh; overflow-y: auto;
+    padding: 24px;
+  }
+  .modal-title {
+    font-size: 18px; font-weight: 900;
+    margin: 0 0 16px;
+    display: flex; gap: 8px; align-items: center;
+  }
+  
+  .chart-wrap {
+    background: var(--input-bg);
+    border: 2px solid var(--card-border);
+    border-radius: 12px;
+    padding: 12px;
+    height: 350px;
+    margin-bottom: 16px;
+  }
+  
+  .snapshot-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .snapshot-table th, .snapshot-table td {
+    padding: 8px; text-align: left;
+    border-bottom: 1px solid var(--section-dashed);
+  }
+  .snapshot-table th {
+    font-weight: 800; color: var(--text-muted);
+    background: var(--dim-bg);
+  }
+  .snapshot-table tr:hover {
+    background: var(--dim-bg);
+  }
+  
+  /* ==== その他 ==== */
+  .hidden { display: none !important; }
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+  }
+  .empty-emoji { font-size: 48px; margin-bottom: 8px; }
+  .empty-text { font-size: 14px; font-weight: 600; }
+  
+  .loading {
+    text-align: center;
+    padding: 20px; color: var(--text-muted);
+    font-size: 14px;
+  }
+  
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    background: var(--accent-light-yellow);
+    border: 1px solid var(--card-border);
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    margin-right: 4px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ログイン画面 -->
+<div id="loginScreen" class="login-screen hidden">
+  <div class="login-card">
+    <div class="login-emoji">📊</div>
+    <h1 class="login-title">YouTube成長分析</h1>
+    <p class="login-subtitle">Googleアカウントでログインしてください</p>
+    <button id="googleLoginBtn" class="login-btn-google">
+      <svg width="20" height="20" viewBox="0 0 48 48">
+        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+      </svg>
+      <span>Googleでログイン</span>
+    </button>
+    <p id="loginError" class="login-error hidden"></p>
+    <p class="login-hint">許可されたアカウントのみアクセス可能です</p>
+  </div>
+</div>
+
+<div class="container">
+  <div class="page-header">
+    <h1 class="page-title">📊 YouTube成長分析</h1>
+    <div class="nav-links">
+      <a href="./" class="nav-link">🎬 トラッカーへ</a>
+      <button id="logoutBtn" class="nav-link">🚪 ログアウト</button>
+    </div>
+  </div>
+
+  <!-- APIキー未設定警告 -->
+  <div id="apiKeyWarning" class="api-key-warning hidden">
+    ⚠️ YouTube API キーが未設定です。HTMLファイル内の <code>YOUTUBE_API_KEY</code> を設定してください。
+  </div>
+
+  <!-- 全体ダッシュボード -->
+  <div class="section">
+    <h2 class="section-title">📈 全体サマリー</h2>
+    <div class="dashboard" id="dashboard">
+      <div class="stat-card">
+        <div class="stat-label">登録チャンネル数</div>
+        <div class="stat-value" id="statChannelCount">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">追跡中の動画数</div>
+        <div class="stat-value" id="statVideoCount">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">スナップショット総数</div>
+        <div class="stat-value" id="statSnapshotCount">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">最後の更新</div>
+        <div class="stat-value" id="statLastUpdate" style="font-size: 14px;">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- チャンネル登録 -->
+  <div class="section">
+    <h2 class="section-title">📡 チャンネル登録</h2>
+    <div class="channel-registration">
+      <input type="text" id="channelInput" class="input-field" 
+             placeholder="チャンネルURL or @handle or チャンネルID">
+      <button id="addChannelBtn" class="btn btn-primary">➕ 追加</button>
+      <button id="fetchChannelVideosBtn" class="btn btn-success">🔄 全動画更新</button>
+    </div>
+    <div class="channel-list" id="channelList"></div>
+    <p style="margin-top: 8px; font-size: 11px; color: var(--text-faint);">
+      例：<code>https://www.youtube.com/@yourchannel</code> または <code>UC...</code>
+    </p>
+  </div>
+
+  <!-- 動画一覧 -->
+  <div class="section">
+    <h2 class="section-title">🎬 追跡中の動画</h2>
+    <div class="video-controls">
+      <input type="text" id="videoInput" class="input-field" 
+             placeholder="動画URL or 動画IDを入力して個別追加">
+      <button id="addVideoBtn" class="btn btn-primary">➕ 動画追加</button>
+      <button id="snapshotAllBtn" class="btn btn-success">📸 全動画スナップショット取得</button>
+    </div>
+    <div id="videoListContainer">
+      <div class="empty-state">
+        <div class="empty-emoji">🎬</div>
+        <div class="empty-text">まだ動画が登録されていません</div>
+        <p style="font-size: 12px; margin-top: 8px;">チャンネルを登録するか、動画URLを入力してください</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 動画詳細モーダル -->
+<div class="modal-overlay" id="videoDetailModal">
+  <div class="modal">
+    <div class="modal-title" id="videoDetailTitle">
+      <span>📊</span><span>動画詳細</span>
+    </div>
+    <div id="videoDetailContent"></div>
+    <div style="text-align: right; margin-top: 16px;">
+      <button class="btn btn-ghost" id="closeVideoDetailBtn">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ==== 状態管理 ====
+  let currentUser = null;
+  // データ構造
+  let channels = []; // [{id, handle, title, thumbnailUrl, subscriberCount}]
+  let videos = []; // [{id, videoId, title, channelId, channelTitle, thumbnailUrl, publishedAt, snapshots: [{at, views, likes, comments}]}]
+
+  // ==== ログイン処理 ====
+  function showLogin() { document.getElementById('loginScreen').classList.remove('hidden'); }
+  function hideLogin() { document.getElementById('loginScreen').classList.add('hidden'); }
+  
+  document.getElementById('googleLoginBtn').addEventListener('click', async () => {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    try {
+      document.getElementById('loginError').classList.add('hidden');
+      await firebaseAuth.signInWithPopup(provider);
+    } catch (err) {
+      if (err.code === 'auth/popup-closed-by-user') return;
+      const errEl = document.getElementById('loginError');
+      errEl.textContent = 'ログインに失敗しました: ' + (err.message || err.code);
+      errEl.classList.remove('hidden');
+    }
+  });
+  
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    if (!confirm('ログアウトしますか？')) return;
+    await firebaseAuth.signOut();
+  });
+
+  firebaseAuth.onAuthStateChanged(async (user) => {
+    if (user) {
+      if (!ALLOWED_EMAILS.includes(user.email)) {
+        const errEl = document.getElementById('loginError');
+        errEl.textContent = `このアカウント（${user.email}）はアクセス許可されていません`;
+        errEl.classList.remove('hidden');
+        await firebaseAuth.signOut();
+        showLogin();
+        return;
+      }
+      currentUser = user;
+      hideLogin();
+      // APIキーチェック
+      if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY === 'YOUR_YOUTUBE_API_KEY_HERE') {
+        document.getElementById('apiKeyWarning').classList.remove('hidden');
+      }
+      await loadFirestoreData();
+      startRealtimeListener();
+    } else {
+      currentUser = null;
+      showLogin();
+    }
+  });
+
+  // ==== Firestore連携 ====
+  const DOC_ID = 'analyzer-data';
+  const COLLECTION = 'analyzer';
+  let firestoreUnsubscribe = null;
+  let firestoreLastSaved = null;
+
+  async function loadFirestoreData() {
+    try {
+      const snap = await firestoreDb.collection(COLLECTION).doc(DOC_ID).get();
+      if (snap.exists) {
+        const data = snap.data();
+        channels = data.channels || [];
+        videos = data.videos || [];
+        firestoreLastSaved = JSON.stringify({ channels, videos });
+        renderAll();
+      } else {
+        // 初回：空ドキュメント作成
+        await saveFirestoreData();
+      }
+    } catch (err) {
+      console.error('[Firestore] 読み込みエラー:', err);
+    }
+  }
+
+  let saveInProgress = false;
+  let savePending = false;
+  async function saveFirestoreData() {
+    if (saveInProgress) { savePending = true; return; }
+    saveInProgress = true;
+    try {
+      await firestoreDb.collection(COLLECTION).doc(DOC_ID).set({
+        channels, videos,
+        _updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      firestoreLastSaved = JSON.stringify({ channels, videos });
+    } catch (err) {
+      console.error('[Firestore] 保存エラー:', err);
+    } finally {
+      saveInProgress = false;
+      if (savePending) {
+        savePending = false;
+        setTimeout(() => saveFirestoreData(), 100);
+      }
+    }
+  }
+
+  function startRealtimeListener() {
+    if (firestoreUnsubscribe) firestoreUnsubscribe();
+    firestoreUnsubscribe = firestoreDb.collection(COLLECTION).doc(DOC_ID)
+      .onSnapshot((snap) => {
+        if (snap.metadata.hasPendingWrites) return;
+        if (!snap.exists) return;
+        const data = snap.data();
+        const json = JSON.stringify({
+          channels: data.channels || [],
+          videos: data.videos || []
+        });
+        if (json === firestoreLastSaved) return;
+        channels = data.channels || [];
+        videos = data.videos || [];
+        firestoreLastSaved = json;
+        renderAll();
+      }, (err) => console.error('[Firestore] リスナーエラー:', err));
+  }
+
+  // ==== YouTube API ====
+  const YT_BASE = 'https://www.googleapis.com/youtube/v3';
+
+  function parseChannelInput(input) {
+    input = input.trim();
+    // URL形式
+    // https://www.youtube.com/channel/UC...
+    let m = input.match(/youtube\.com\/channel\/(UC[\w-]+)/);
+    if (m) return { type: 'id', value: m[1] };
+    // https://www.youtube.com/@handle
+    m = input.match(/youtube\.com\/@([\w.-]+)/);
+    if (m) return { type: 'handle', value: m[1] };
+    // @handle
+    if (input.startsWith('@')) return { type: 'handle', value: input.slice(1) };
+    // UC...で始まる → channel ID
+    if (input.match(/^UC[\w-]+$/)) return { type: 'id', value: input };
+    // それ以外はハンドル扱い
+    return { type: 'handle', value: input };
+  }
+
+  function parseVideoInput(input) {
+    input = input.trim();
+    // https://www.youtube.com/watch?v=XXXXXXXXXXX
+    let m = input.match(/[?&]v=([\w-]{11})/);
+    if (m) return m[1];
+    // https://youtu.be/XXXXXXXXXXX
+    m = input.match(/youtu\.be\/([\w-]{11})/);
+    if (m) return m[1];
+    // https://www.youtube.com/shorts/XXXXXXXXXXX
+    m = input.match(/\/shorts\/([\w-]{11})/);
+    if (m) return m[1];
+    // 動画IDのみ
+    if (input.match(/^[\w-]{11}$/)) return input;
+    return null;
+  }
+
+  async function youtubeFetch(endpoint, params) {
+    if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY === 'YOUR_YOUTUBE_API_KEY_HERE') {
+      throw new Error('YouTube API キーが未設定です');
+    }
+    const url = new URL(`${YT_BASE}/${endpoint}`);
+    for (const [k, v] of Object.entries(params)) {
+      url.searchParams.append(k, v);
+    }
+    url.searchParams.append('key', YOUTUBE_API_KEY);
+    const res = await fetch(url);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(`YouTube API error: ${err.error?.message || res.statusText}`);
+    }
+    return await res.json();
+  }
+
+  async function fetchChannelInfo(input) {
+    const parsed = parseChannelInput(input);
+    if (parsed.type === 'id') {
+      const data = await youtubeFetch('channels', {
+        part: 'snippet,statistics,contentDetails',
+        id: parsed.value
+      });
+      if (!data.items || data.items.length === 0) throw new Error('チャンネルが見つかりません');
+      return data.items[0];
+    } else {
+      const data = await youtubeFetch('channels', {
+        part: 'snippet,statistics,contentDetails',
+        forHandle: '@' + parsed.value
+      });
+      if (!data.items || data.items.length === 0) throw new Error('チャンネルが見つかりません');
+      return data.items[0];
+    }
+  }
+
+  async function fetchVideoInfo(videoIds) {
+    // videoIdsは最大50件まで一度に
+    const chunks = [];
+    for (let i = 0; i < videoIds.length; i += 50) {
+      chunks.push(videoIds.slice(i, i + 50));
+    }
+    const results = [];
+    for (const chunk of chunks) {
+      const data = await youtubeFetch('videos', {
+        part: 'snippet,statistics,contentDetails',
+        id: chunk.join(',')
+      });
+      results.push(...(data.items || []));
+    }
+    return results;
+  }
+
+  async function fetchChannelUploads(channelId, uploadsPlaylistId, max = 50) {
+    // uploadsプレイリストから最新動画IDを取得
+    const data = await youtubeFetch('playlistItems', {
+      part: 'snippet,contentDetails',
+      playlistId: uploadsPlaylistId,
+      maxResults: max
+    });
+    return (data.items || []).map(item => item.contentDetails.videoId);
+  }
+
+  // ==== チャンネル追加 ====
+  document.getElementById('addChannelBtn').addEventListener('click', async () => {
+    const input = document.getElementById('channelInput').value.trim();
+    if (!input) return;
+    const btn = document.getElementById('addChannelBtn');
+    btn.disabled = true;
+    btn.textContent = '取得中...';
+    try {
+      const info = await fetchChannelInfo(input);
+      const channelId = info.id;
+      // 既存チェック
+      if (channels.find(c => c.id === channelId)) {
+        alert('既に登録されています');
+        return;
+      }
+      channels.push({
+        id: channelId,
+        handle: info.snippet.customUrl || '',
+        title: info.snippet.title,
+        thumbnailUrl: info.snippet.thumbnails?.default?.url || '',
+        subscriberCount: parseInt(info.statistics.subscriberCount || 0),
+        videoCount: parseInt(info.statistics.videoCount || 0),
+        uploadsPlaylistId: info.contentDetails.relatedPlaylists.uploads,
+        addedAt: new Date().toISOString()
+      });
+      document.getElementById('channelInput').value = '';
+      await saveFirestoreData();
+      renderAll();
+      // 追加したチャンネルの最新動画も自動取得
+      await fetchVideosForChannel(channelId);
+    } catch (err) {
+      alert('チャンネル取得失敗: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '➕ 追加';
+    }
+  });
+
+  // チャンネル削除
+  function removeChannel(channelId) {
+    if (!confirm('このチャンネルを削除しますか？（動画データは残ります）')) return;
+    channels = channels.filter(c => c.id !== channelId);
+    saveFirestoreData();
+    renderAll();
+  }
+
+  // 全チャンネルの新着動画取得
+  document.getElementById('fetchChannelVideosBtn').addEventListener('click', async () => {
+    if (channels.length === 0) { alert('チャンネルを先に登録してください'); return; }
+    const btn = document.getElementById('fetchChannelVideosBtn');
+    btn.disabled = true;
+    btn.textContent = '取得中...';
+    try {
+      let totalNew = 0;
+      for (const ch of channels) {
+        const n = await fetchVideosForChannel(ch.id, 10);
+        totalNew += n;
+      }
+      alert(`${totalNew}本の新規動画を追加しました`);
+    } catch (err) {
+      alert('エラー: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🔄 全動画更新';
+    }
+  });
+
+  async function fetchVideosForChannel(channelId, maxVideos = 10) {
+    const ch = channels.find(c => c.id === channelId);
+    if (!ch) return 0;
+    try {
+      const videoIds = await fetchChannelUploads(channelId, ch.uploadsPlaylistId, maxVideos);
+      // 既存動画を除外
+      const existingIds = new Set(videos.map(v => v.videoId));
+      const newIds = videoIds.filter(id => !existingIds.has(id));
+      if (newIds.length === 0) return 0;
+      const videoInfos = await fetchVideoInfo(newIds);
+      const now = new Date().toISOString();
+      for (const info of videoInfos) {
+        videos.push({
+          id: 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+          videoId: info.id,
+          title: info.snippet.title,
+          description: (info.snippet.description || '').slice(0, 500),
+          channelId: info.snippet.channelId,
+          channelTitle: info.snippet.channelTitle,
+          thumbnailUrl: info.snippet.thumbnails?.medium?.url || info.snippet.thumbnails?.default?.url || '',
+          publishedAt: info.snippet.publishedAt,
+          duration: info.contentDetails.duration,
+          tags: info.snippet.tags || [],
+          snapshots: [{
+            at: now,
+            views: parseInt(info.statistics.viewCount || 0),
+            likes: parseInt(info.statistics.likeCount || 0),
+            comments: parseInt(info.statistics.commentCount || 0)
+          }],
+          addedAt: now
+        });
+      }
+      await saveFirestoreData();
+      renderAll();
+      return newIds.length;
+    } catch (err) {
+      console.error(err);
+      alert('動画取得失敗: ' + err.message);
+      return 0;
+    }
+  }
+
+  // ==== 動画個別追加 ====
+  document.getElementById('addVideoBtn').addEventListener('click', async () => {
+    const input = document.getElementById('videoInput').value.trim();
+    if (!input) return;
+    const videoId = parseVideoInput(input);
+    if (!videoId) { alert('動画URLまたはIDが不正です'); return; }
+    if (videos.find(v => v.videoId === videoId)) { alert('既に登録されています'); return; }
+    const btn = document.getElementById('addVideoBtn');
+    btn.disabled = true;
+    btn.textContent = '取得中...';
+    try {
+      const infos = await fetchVideoInfo([videoId]);
+      if (infos.length === 0) throw new Error('動画が見つかりません');
+      const info = infos[0];
+      const now = new Date().toISOString();
+      videos.push({
+        id: 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+        videoId: info.id,
+        title: info.snippet.title,
+        description: (info.snippet.description || '').slice(0, 500),
+        channelId: info.snippet.channelId,
+        channelTitle: info.snippet.channelTitle,
+        thumbnailUrl: info.snippet.thumbnails?.medium?.url || '',
+        publishedAt: info.snippet.publishedAt,
+        duration: info.contentDetails.duration,
+        tags: info.snippet.tags || [],
+        snapshots: [{
+          at: now,
+          views: parseInt(info.statistics.viewCount || 0),
+          likes: parseInt(info.statistics.likeCount || 0),
+          comments: parseInt(info.statistics.commentCount || 0)
+        }],
+        addedAt: now
+      });
+      document.getElementById('videoInput').value = '';
+      await saveFirestoreData();
+      renderAll();
+    } catch (err) {
+      alert('動画追加失敗: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '➕ 動画追加';
+    }
+  });
+
+  // ==== 全動画スナップショット取得 ====
+  document.getElementById('snapshotAllBtn').addEventListener('click', async () => {
+    if (videos.length === 0) { alert('動画が登録されていません'); return; }
+    const btn = document.getElementById('snapshotAllBtn');
+    btn.disabled = true;
+    btn.textContent = '📸 取得中...';
+    try {
+      const videoIds = videos.map(v => v.videoId);
+      const infos = await fetchVideoInfo(videoIds);
+      const now = new Date().toISOString();
+      let updated = 0;
+      for (const info of infos) {
+        const v = videos.find(x => x.videoId === info.id);
+        if (!v) continue;
+        v.snapshots = v.snapshots || [];
+        v.snapshots.push({
+          at: now,
+          views: parseInt(info.statistics.viewCount || 0),
+          likes: parseInt(info.statistics.likeCount || 0),
+          comments: parseInt(info.statistics.commentCount || 0)
+        });
+        // 最新タイトル等も更新
+        v.title = info.snippet.title;
+        updated++;
+      }
+      await saveFirestoreData();
+      renderAll();
+      alert(`${updated}本の動画のスナップショットを取得しました`);
+    } catch (err) {
+      alert('エラー: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '📸 全動画スナップショット取得';
+    }
+  });
+
+  // 動画削除
+  function removeVideo(vid) {
+    if (!confirm('この動画の追跡を停止して削除しますか？')) return;
+    videos = videos.filter(v => v.id !== vid);
+    saveFirestoreData();
+    renderAll();
+  }
+
+  // ==== 画面描画 ====
+  function renderAll() {
+    renderDashboard();
+    renderChannelList();
+    renderVideoList();
+  }
+
+  function renderDashboard() {
+    document.getElementById('statChannelCount').textContent = channels.length;
+    document.getElementById('statVideoCount').textContent = videos.length;
+    const totalSnapshots = videos.reduce((s, v) => s + (v.snapshots?.length || 0), 0);
+    document.getElementById('statSnapshotCount').textContent = totalSnapshots;
+    // 最新スナップショット時刻
+    let latest = null;
+    videos.forEach(v => {
+      (v.snapshots || []).forEach(s => {
+        if (!latest || new Date(s.at) > new Date(latest)) latest = s.at;
+      });
+    });
+    document.getElementById('statLastUpdate').textContent = latest 
+      ? new Date(latest).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+      : '—';
+  }
+
+  function renderChannelList() {
+    const container = document.getElementById('channelList');
+    if (channels.length === 0) {
+      container.innerHTML = '<div style="color: var(--text-faint); font-size: 12px;">まだチャンネルが登録されていません</div>';
+      return;
+    }
+    container.innerHTML = channels.map(ch => `
+      <div class="channel-chip">
+        <span>📺 ${escapeHtml(ch.title)}</span>
+        <span style="color: var(--text-faint); font-size: 11px;">(${ch.subscriberCount.toLocaleString()}人)</span>
+        <button class="channel-chip-remove" data-channel-id="${ch.id}" title="削除">✕</button>
+      </div>
+    `).join('');
+    container.querySelectorAll('.channel-chip-remove').forEach(btn => {
+      btn.addEventListener('click', () => removeChannel(btn.dataset.channelId));
+    });
+  }
+
+  function renderVideoList() {
+    const container = document.getElementById('videoListContainer');
+    if (videos.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-emoji">🎬</div>
+          <div class="empty-text">まだ動画が登録されていません</div>
+          <p style="font-size: 12px; margin-top: 8px;">チャンネルを登録するか、動画URLを入力してください</p>
+        </div>
+      `;
+      return;
+    }
+    const sorted = [...videos].sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+    container.innerHTML = '<div class="video-list">' + sorted.map(v => {
+      const lastSnap = v.snapshots && v.snapshots.length > 0 
+        ? v.snapshots[v.snapshots.length - 1] 
+        : { views: 0, likes: 0, comments: 0 };
+      const published = new Date(v.publishedAt);
+      const hoursSince = (Date.now() - published.getTime()) / 3600000;
+      let timeAgo;
+      if (hoursSince < 1) timeAgo = Math.round(hoursSince * 60) + '分前';
+      else if (hoursSince < 24) timeAgo = Math.round(hoursSince) + '時間前';
+      else if (hoursSince < 24 * 7) timeAgo = Math.round(hoursSince / 24) + '日前';
+      else timeAgo = Math.round(hoursSince / 24 / 7) + '週間前';
+      return `
+        <div class="video-card">
+          <img src="${escapeHtml(v.thumbnailUrl)}" alt="" class="video-thumb">
+          <div class="video-info">
+            <div class="video-title" title="${escapeHtml(v.title)}">${escapeHtml(v.title)}</div>
+            <div class="video-meta">📺 ${escapeHtml(v.channelTitle)} · ${timeAgo} · 追跡: ${v.snapshots?.length || 0}回</div>
+            <div class="video-stats">
+              <div class="video-stat">👀 ${lastSnap.views.toLocaleString()}</div>
+              <div class="video-stat">👍 ${lastSnap.likes.toLocaleString()}</div>
+              <div class="video-stat">💬 ${lastSnap.comments.toLocaleString()}</div>
+            </div>
+          </div>
+          <div class="video-actions">
+            <button class="btn btn-sm btn-primary" data-action="detail" data-vid="${v.id}">📊 詳細</button>
+            <button class="btn btn-sm" data-action="open" data-videoid="${v.videoId}">▶️ 開く</button>
+            <button class="btn btn-sm btn-ghost" data-action="remove" data-vid="${v.id}" style="color: var(--danger);">🗑️</button>
+          </div>
+        </div>
+      `;
+    }).join('') + '</div>';
+    
+    container.querySelectorAll('[data-action="detail"]').forEach(btn => {
+      btn.addEventListener('click', () => showVideoDetail(btn.dataset.vid));
+    });
+    container.querySelectorAll('[data-action="open"]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        window.open(`https://www.youtube.com/watch?v=${btn.dataset.videoid}`, '_blank');
+      });
+    });
+    container.querySelectorAll('[data-action="remove"]').forEach(btn => {
+      btn.addEventListener('click', () => removeVideo(btn.dataset.vid));
+    });
+  }
+
+  // 動画詳細モーダル
+  let detailChart = null;
+  function showVideoDetail(vid) {
+    const v = videos.find(x => x.id === vid);
+    if (!v) return;
+    const title = document.getElementById('videoDetailTitle');
+    title.innerHTML = `<span>📊</span><span>${escapeHtml(v.title)}</span>`;
+    const content = document.getElementById('videoDetailContent');
+    
+    const snaps = (v.snapshots || []).slice().sort((a, b) => new Date(a.at) - new Date(b.at));
+    const published = new Date(v.publishedAt);
+    
+    content.innerHTML = `
+      <div style="display: flex; gap: 16px; margin-bottom: 16px;">
+        <img src="${escapeHtml(v.thumbnailUrl)}" style="width: 240px; height: 135px; object-fit: cover; border-radius: 8px; border: 2px solid var(--card-border);">
+        <div style="flex: 1;">
+          <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">📺 ${escapeHtml(v.channelTitle)}</div>
+          <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">📅 ${published.toLocaleString('ja-JP')}</div>
+          <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">⏱️ ${formatDuration(v.duration)}</div>
+          ${v.tags && v.tags.length > 0 ? `
+            <div style="margin-bottom: 8px;">
+              ${v.tags.slice(0, 10).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('')}
+            </div>
+          ` : ''}
+          <a href="https://www.youtube.com/watch?v=${v.videoId}" target="_blank" class="btn btn-sm">▶️ YouTubeで見る</a>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="detailChartCanvas"></canvas>
+      </div>
+      <h3 style="margin: 16px 0 8px; font-size: 14px;">📊 スナップショット履歴</h3>
+      <table class="snapshot-table">
+        <thead>
+          <tr>
+            <th>日時</th>
+            <th>投稿からの経過</th>
+            <th class="right">👀 再生</th>
+            <th class="right">👍 いいね</th>
+            <th class="right">💬 コメント</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${snaps.slice().reverse().map(s => {
+            const at = new Date(s.at);
+            const elapsed = formatElapsed(at - published);
+            return `
+              <tr>
+                <td>${at.toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+                <td>${elapsed}</td>
+                <td class="right">${s.views.toLocaleString()}</td>
+                <td class="right">${s.likes.toLocaleString()}</td>
+                <td class="right">${s.comments.toLocaleString()}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+    
+    document.getElementById('videoDetailModal').classList.add('show');
+    
+    // グラフ描画
+    setTimeout(() => {
+      const ctx = document.getElementById('detailChartCanvas').getContext('2d');
+      if (detailChart) detailChart.destroy();
+      detailChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: snaps.map(s => {
+            const d = new Date(s.at);
+            return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+          }),
+          datasets: [
+            { label: '再生数', data: snaps.map(s => s.views), 
+              borderColor: '#ff6b9d', backgroundColor: '#ff6b9d', 
+              borderWidth: 3, tension: 0.3, yAxisID: 'y' },
+            { label: 'いいね', data: snaps.map(s => s.likes), 
+              borderColor: '#4ecdc4', backgroundColor: '#4ecdc4', 
+              borderWidth: 2, tension: 0.3, yAxisID: 'y1' },
+            { label: 'コメント', data: snaps.map(s => s.comments), 
+              borderColor: '#ffd93d', backgroundColor: '#ffd93d', 
+              borderWidth: 2, tension: 0.3, yAxisID: 'y1' }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: 'top' } },
+          scales: {
+            y: { position: 'left', title: { display: true, text: '再生数' } },
+            y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'いいね / コメント' } }
+          }
+        }
+      });
+    }, 100);
+  }
+
+  document.getElementById('closeVideoDetailBtn').addEventListener('click', () => {
+    document.getElementById('videoDetailModal').classList.remove('show');
+    if (detailChart) { detailChart.destroy(); detailChart = null; }
+  });
+  document.getElementById('videoDetailModal').addEventListener('click', (e) => {
+    if (e.target.id === 'videoDetailModal') {
+      document.getElementById('videoDetailModal').classList.remove('show');
+      if (detailChart) { detailChart.destroy(); detailChart = null; }
+    }
+  });
+
+  // ==== ユーティリティ ====
+  function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  }
+  
+  function formatDuration(iso) {
+    // PT1H2M30S → 1:02:30
+    const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if (!m) return iso;
+    const h = parseInt(m[1] || 0);
+    const min = parseInt(m[2] || 0);
+    const s = parseInt(m[3] || 0);
+    if (h > 0) return `${h}:${String(min).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    return `${min}:${String(s).padStart(2,'0')}`;
+  }
+  
+  function formatElapsed(ms) {
+    const hours = ms / 3600000;
+    if (hours < 1) return `${Math.round(ms / 60000)}分後`;
+    if (hours < 24) return `${hours.toFixed(1)}時間後`;
+    const days = hours / 24;
+    if (days < 7) return `${days.toFixed(1)}日後`;
+    return `${(days / 7).toFixed(1)}週間後`;
+  }
+</script>
+
+</body>
+</html>
