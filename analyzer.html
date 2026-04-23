@@ -8,6 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
   const firebaseConfig = {
     apiKey: "AIzaSyCcE-y_spXxhFDU5B56zaOGGAQMhz7lo-I",
@@ -19,6 +20,11 @@
   };
   const ALLOWED_EMAILS = ['waon.games.waon@gmail.com', 'c5ykykc5@gmail.com'];
   const YOUTUBE_API_KEY = 'AIzaSyCcE-y_spXxhFDU5B56zaOGGAQMhz7lo-I';
+  
+  // OAuth クライアントID（YouTube Analytics API 用）
+  // Google Cloud Console > APIとサービス > 認証情報 > OAuth 2.0 クライアント ID から取得
+  // 「Web client (auto created by Google Service)」のクライアントID
+  const GOOGLE_OAUTH_CLIENT_ID = '1013536609350-27j7kldfqq7st1c0ednul4bbcoikvj2e.apps.googleusercontent.com';
   
   const FIXED_TABS = [
     { key: 'copi', emoji: '🌙', label: 'コピプラネット' },
@@ -263,6 +269,9 @@
       <div style="font-size: 13px; font-weight: 800; margin-bottom: 6px;">🔐 YouTube詳細データ連携</div>
       <div id="oauthStatusBox" style="padding: 10px; background: var(--dim-bg); border: 2px solid var(--card-border); border-radius: 8px; font-size: 12px;">
         <div style="margin-bottom: 6px;">自分のチャンネルの維持率・CTR・平均視聴時間などの<br>詳細データを取得するには、OAuth認証が必要です。</div>
+        <div id="oauthSetupWarning" style="display: none; margin-bottom: 8px; padding: 8px; background: var(--danger-bg); color: var(--danger); border: 2px solid var(--danger); border-radius: 6px; font-size: 11px; font-weight: 700;">
+          ⚠️ OAuth クライアントIDが未設定です。GCP > 認証情報の「Web client」のIDを analyzer.html の <code>GOOGLE_OAUTH_CLIENT_ID</code> に設定してください。
+        </div>
         <div id="oauthStatus" style="margin-bottom: 8px; font-weight: 700;">📴 未連携</div>
         <button id="oauthLoginBtn" class="btn btn-sm btn-primary">🔐 YouTube連携</button>
         <button id="oauthLogoutBtn" class="btn btn-sm btn-ghost hidden" style="color: var(--danger);">🚪 連携解除</button>
@@ -1088,6 +1097,15 @@
     document.querySelectorAll('[data-color-set]').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.colorSet === currentColor);
     });
+    // 未設定警告
+    const warning = document.getElementById('oauthSetupWarning');
+    if (warning) {
+      if (!GOOGLE_OAUTH_CLIENT_ID || GOOGLE_OAUTH_CLIENT_ID === 'YOUR_OAUTH_CLIENT_ID_HERE') {
+        warning.style.display = 'block';
+      } else {
+        warning.style.display = 'none';
+      }
+    }
     // OAuth状態
     const statusEl = document.getElementById('oauthStatus');
     const loginBtn = document.getElementById('oauthLoginBtn');
@@ -1144,27 +1162,36 @@
   
   document.getElementById('oauthLoginBtn').addEventListener('click', async () => {
     try {
-      // Google Identity Services でトークン取得
-      // ポップアップで認可フロー
-      const clientId = firebaseConfig.appId.split(':')[1] + '-' + firebaseConfig.messagingSenderId.slice(0, 8);
-      // 注：正しいclientIdはFirebase Auth が内部で持っているので、代替アプローチ：
-      // firebase authのprovider再認証で追加スコープを要求
-      const provider = new firebase.auth.GoogleAuthProvider();
-      provider.addScope('https://www.googleapis.com/auth/youtube.readonly');
-      provider.addScope('https://www.googleapis.com/auth/yt-analytics.readonly');
-      provider.setCustomParameters({ prompt: 'consent' });
+      // Google Identity Services のトークンクライアント
+      if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
+        throw new Error('Google Identity Services が読み込まれていません。しばらく待ってから再試行してください');
+      }
+      if (!GOOGLE_OAUTH_CLIENT_ID || GOOGLE_OAUTH_CLIENT_ID === 'YOUR_OAUTH_CLIENT_ID_HERE') {
+        throw new Error('OAuth クライアントIDが未設定です。Google Cloud Console > 認証情報 からWebクライアントIDを確認し、analyzer.htmlに貼り付けてください');
+      }
       
-      const result = await firebaseAuth.signInWithPopup(provider);
-      const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
-      const token = credential?.accessToken;
-      if (!token) throw new Error('アクセストークン取得失敗');
-      
-      oauthAccessToken = token;
-      // Googleアクセストークンは通常1時間有効
-      oauthTokenExpireAt = Date.now() + 55 * 60 * 1000;
-      
-      // 自チャンネルIDを取得
-      await fetchMyChannelId();
+      await new Promise((resolve, reject) => {
+        const tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_OAUTH_CLIENT_ID,
+          scope: YT_ANALYTICS_SCOPES,
+          prompt: 'consent',
+          callback: async (response) => {
+            if (response.error) {
+              reject(new Error('認証エラー: ' + response.error));
+              return;
+            }
+            oauthAccessToken = response.access_token;
+            oauthTokenExpireAt = Date.now() + (response.expires_in * 1000) - 60000; // 念のため1分余裕
+            try {
+              await fetchMyChannelId();
+              resolve();
+            } catch (err) {
+              reject(err);
+            }
+          }
+        });
+        tokenClient.requestAccessToken();
+      });
       
       alert('✅ YouTube連携に成功しました！\n自分のチャンネルの維持率・CTR等の詳細データが取得できます。');
       updateSettingsModal();
