@@ -92,12 +92,18 @@
   .channel-info-card .ci-main { flex: 1; min-width: 200px; }
   .channel-info-card .ci-actions { display: flex; gap: 6px; flex-wrap: wrap; }
   
-  .rival-channel-header { display: flex; align-items: center; gap: 10px; padding: 10px; margin-bottom: 10px; background: var(--dim-bg); border: 2px solid var(--card-border); border-radius: 10px; flex-wrap: wrap; }
+  .rival-channel-header { display: flex; align-items: center; gap: 10px; padding: 10px; margin-bottom: 10px; background: var(--dim-bg); border: 2px solid var(--card-border); border-radius: 10px; flex-wrap: wrap; cursor: pointer; transition: all 0.15s; }
+  .rival-channel-header:hover { background: var(--accent-light-yellow); }
   .rival-channel-header img { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--card-border); }
   .rival-channel-info { flex: 1; min-width: 180px; }
   .rival-channel-name { font-weight: 800; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .rival-channel-meta { font-size: 11px; color: var(--text-muted); }
   .rival-channel-actions { display: flex; gap: 4px; flex-shrink: 0; flex-wrap: wrap; }
+  .rival-toggle-icon { font-size: 14px; font-weight: 900; color: var(--text-muted); transition: transform 0.2s; }
+  .rival-collapsed .rival-toggle-icon { transform: rotate(-90deg); }
+  .rival-body { margin-top: 8px; }
+  .rival-collapsed .rival-body { display: none; }
+  .rival-section-card { background: var(--card-bg); border: 3px solid var(--card-border); border-radius: 14px; box-shadow: 5px 5px 0 var(--shadow); padding: 14px; margin-bottom: 14px; }
   
   .video-list { display: flex; flex-direction: column; gap: 10px; }
   .video-card { display: flex; gap: 12px; padding: 10px; background: var(--dim-bg); border: 2px solid var(--card-border); border-radius: 10px; }
@@ -191,6 +197,8 @@
   let currentTab = 'copi';
   let channels = { copi: null, waon: null, rivals: [] };
   let videos = [];
+  // 競合チャンネルの折りたたみ状態（channelIdのSet）
+  const collapsedRivals = new Set();
 
   function showLogin() { document.getElementById('loginScreen').classList.remove('hidden'); }
   function hideLogin() { document.getElementById('loginScreen').classList.add('hidden'); }
@@ -448,6 +456,12 @@
         alert('このチャンネルは既に固定タブに登録されています'); return;
       }
       channels.rivals.push({ info });
+      // 既存の競合チャンネル2件以上ある場合は新規チャンネル以外を自動折りたたみ
+      if (channels.rivals.length > 1) {
+        channels.rivals.forEach(r => {
+          if (r.info.id !== info.id) collapsedRivals.add(r.info.id);
+        });
+      }
       await saveFirestoreData();
       await fetchVideosForChannel(info, 'rival', 10);
     } catch (err) {
@@ -640,6 +654,7 @@
 
   function renderRivalTabContent() {
     const container = document.getElementById('tab-rival');
+    const rivalCount = channels.rivals.length;
     let html = `
       <div class="section">
         <h2 class="section-title">👀 競合チャンネル</h2>
@@ -647,7 +662,13 @@
           <input type="text" class="input-field" id="rival-input" placeholder="競合チャンネルURL or @handle">
           <button class="btn btn-primary" id="rival-register-btn">➕ 追加</button>
         </div>
-        <p class="hint">複数のチャンネルを登録できます</p>
+        <p class="hint">複数のチャンネルを登録できます。ヘッダーをクリックで折りたたみ／展開</p>
+        ${rivalCount > 0 ? `
+          <div style="margin-top: 10px; display: flex; gap: 6px;">
+            <button class="btn btn-sm" id="rival-expand-all">▼ 全て展開</button>
+            <button class="btn btn-sm" id="rival-collapse-all">▶ 全て折りたたむ</button>
+          </div>
+        ` : ''}
       </div>
     `;
     
@@ -664,23 +685,27 @@
       for (const r of channels.rivals) {
         const ch = r.info;
         const vids = videos.filter(v => v.channelId === ch.id);
+        const isCollapsed = collapsedRivals.has(ch.id);
         html += `
-          <div class="section">
-            <div class="rival-channel-header">
+          <div class="rival-section-card ${isCollapsed ? 'rival-collapsed' : ''}" data-rival-card="${ch.id}">
+            <div class="rival-channel-header" data-rival-toggle="${ch.id}">
+              <span class="rival-toggle-icon">▼</span>
               <img src="${escapeHtml(ch.thumbnailUrl)}" alt="">
               <div class="rival-channel-info">
                 <div class="rival-channel-name">${escapeHtml(ch.title)}</div>
                 <div class="rival-channel-meta">📊 ${ch.subscriberCount.toLocaleString()}人 · 追跡中 ${vids.length}本</div>
               </div>
-              <div class="rival-channel-actions">
+              <div class="rival-channel-actions" onclick="event.stopPropagation()">
                 <button class="btn btn-sm btn-success" data-rival-snapshot="${ch.id}">📸 取得</button>
                 <button class="btn btn-sm" data-rival-refresh="${ch.id}">🔄 新着</button>
                 <button class="btn btn-sm btn-danger" data-rival-remove="${ch.id}">🗑️</button>
               </div>
             </div>
-            ${vids.length === 0 
-              ? `<div class="empty-state"><div class="empty-text" style="font-size: 12px;">動画未取得</div></div>`
-              : renderVideoListHtml(vids)}
+            <div class="rival-body">
+              ${vids.length === 0 
+                ? `<div class="empty-state"><div class="empty-text" style="font-size: 12px;">動画未取得</div></div>`
+                : renderVideoListHtml(vids)}
+            </div>
           </div>
         `;
       }
@@ -730,6 +755,38 @@
     container.querySelectorAll('[data-rival-remove]').forEach(btn => {
       btn.addEventListener('click', () => removeRivalChannel(btn.dataset.rivalRemove));
     });
+    
+    // ヘッダークリックで開閉
+    container.querySelectorAll('[data-rival-toggle]').forEach(header => {
+      header.addEventListener('click', (e) => {
+        // ボタン部分のクリックは無視（別のハンドラーが発火済み）
+        if (e.target.closest('.rival-channel-actions')) return;
+        const channelId = header.dataset.rivalToggle;
+        if (collapsedRivals.has(channelId)) {
+          collapsedRivals.delete(channelId);
+        } else {
+          collapsedRivals.add(channelId);
+        }
+        const card = container.querySelector(`[data-rival-card="${channelId}"]`);
+        if (card) card.classList.toggle('rival-collapsed');
+      });
+    });
+    
+    // 全展開・全折りたたみ
+    const expandAllBtn = container.querySelector('#rival-expand-all');
+    if (expandAllBtn) {
+      expandAllBtn.addEventListener('click', () => {
+        collapsedRivals.clear();
+        renderRivalTabContent();
+      });
+    }
+    const collapseAllBtn = container.querySelector('#rival-collapse-all');
+    if (collapseAllBtn) {
+      collapseAllBtn.addEventListener('click', () => {
+        channels.rivals.forEach(r => collapsedRivals.add(r.info.id));
+        renderRivalTabContent();
+      });
+    }
     
     attachVideoListHandlers(container);
   }
