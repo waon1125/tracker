@@ -2687,73 +2687,26 @@
 <!-- 設定モーダル -->
 <div class="modal-overlay" id="settingsModal">
   <div class="modal">
-    <div class="modal-title"><span>⚙️</span><span>GitHub Gist 同期設定</span></div>
+    <div class="modal-title"><span>⚙️</span><span>設定</span></div>
     
     <div class="modal-section">
-      <div class="modal-section-title">🔑 認証情報</div>
-      <div class="input-group">
-        <label class="input-label">GitHub Personal Access Token</label>
-        <input type="password" id="tokenInput" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
-      </div>
-      <div class="input-group">
-        <label class="input-label">Gist ID（既存のGistを使う場合。空欄なら新規作成）</label>
-        <input type="text" id="gistIdInput" placeholder="新規作成する場合は空欄">
-      </div>
-      <div class="preview-box" id="authStatus">Token未入力</div>
+      <div class="modal-section-title">👤 アカウント情報</div>
+      <div class="preview-box" id="accountInfo">未ログイン</div>
       <div class="btn-row">
-        <button class="btn btn-save" id="saveAuthBtn">💾 保存してテスト</button>
-      </div>
-    </div>
-
-    <div class="modal-section hidden" id="shareInfoSection">
-      <div class="modal-section-title">🔗 相手に共有する情報</div>
-      <div class="setup-steps">相手にも同じデータを見てもらうには、以下の <b>2つの値</b> を伝えてください：</div>
-      <div class="share-box">
-        <div class="share-box-label">① Personal Access Token</div>
-        <div class="share-code" id="shareToken">—</div>
-      </div>
-      <div class="share-box">
-        <div class="share-box-label">② Gist ID</div>
-        <div class="share-code" id="shareGistId">—</div>
-      </div>
-      <div class="hint">⚠️ Tokenは機密情報です。LINE個人チャットや安全な方法で伝えてください。<br>※相手に同じデータを編集させたい場合、同じTokenを共有する必要があります。</div>
-    </div>
-
-    <div class="modal-section">
-      <div class="modal-section-title">📖 セットアップ手順（初回のみ・10分）</div>
-      <div class="setup-steps">
-        <b>ステップ1：GitHubアカウントを作成</b>
-        <ol>
-          <li><a href="https://github.com/signup" target="_blank">github.com/signup</a> で無料アカウント作成</li>
-          <li>メール認証を完了させる</li>
-        </ol>
-        
-        <b>ステップ2：Personal Access Tokenを発行</b>
-        <ol>
-          <li>ログイン後、<a href="https://github.com/settings/tokens?type=beta" target="_blank">Fine-grained tokens ページ</a>を開く</li>
-          <li>右上「<b>Generate new token</b>」をクリック</li>
-          <li>「<b>Token name</b>」に好きな名前（例：「tracker」）</li>
-          <li>「<b>Expiration</b>」で期限を選択（「<b>No expiration</b>」にすれば永年有効）</li>
-          <li>「<b>Repository access</b>」は「<b>Public Repositories (read-only)</b>」のまま</li>
-          <li>ページをスクロールして「<b>Account permissions</b>」セクションを探す</li>
-          <li>「<b>Gists</b>」を見つけて「<b>Access: Read and write</b>」に変更</li>
-          <li>下の「<b>Generate token</b>」をクリック</li>
-          <li>表示された Token（<code>github_pat_...</code>）を<b>必ずコピー</b>（再表示不可！）</li>
-          <li>上の欄に貼り付けて「保存してテスト」</li>
-        </ol>
+        <button class="btn btn-ghost" id="logoutBtn">🚪 ログアウト</button>
       </div>
     </div>
 
     <div class="modal-section">
-      <div class="modal-section-title">👥 他の人と同期する場合</div>
+      <div class="modal-section-title">🔄 同期について</div>
       <div class="setup-steps">
-        設定が完了すると、上に「相手に共有する情報」が表示されます。<br>
-        <b>相手にもデータ編集させたい場合：</b>
-        <ol>
-          <li>上の「① Token」と「② Gist ID」を相手にコピーして送る</li>
-          <li>相手はtracker.htmlを開いて、同じ情報を入力</li>
-          <li>🎉 完全同期完了！</li>
-        </ol>
+        <b>Firebase Firestore</b>でリアルタイム同期中です。<br>
+        編集するとすぐに相方の画面にも反映されます。<br><br>
+        <b>アクセス許可アカウント：</b>
+        <ul style="margin: 8px 0; padding-left: 20px;">
+          <li>waon.games.waon@gmail.com</li>
+          <li>c5ykykc5@gmail.com</li>
+        </ul>
       </div>
     </div>
 
@@ -4102,76 +4055,37 @@
     });
   });
 
-  // 設定モーダル
+  // 設定モーダル（Firestore/Auth対応）
   function openSettingsModal() {
-    document.getElementById('tokenInput').value = ghToken;
-    document.getElementById('gistIdInput').value = gistId;
-    updateAuthStatus();
-    updateShareInfo();
+    updateAccountInfo();
     document.getElementById('settingsModal').classList.add('show');
   }
   function closeSettingsModal() { document.getElementById('settingsModal').classList.remove('show'); }
-  function updateAuthStatus() {
-    const el = document.getElementById('authStatus');
-    const t = document.getElementById('tokenInput').value.trim();
-    const g = document.getElementById('gistIdInput').value.trim();
-    if (!t) { el.textContent = 'Tokenを入力してください'; el.className = 'preview-box error'; return; }
-    if (!(t.startsWith('ghp_') || t.startsWith('github_pat_'))) {
-      el.textContent = '⚠️ GitHubのTokenは「ghp_」または「github_pat_」で始まります';
-      el.className = 'preview-box error'; return;
-    }
-    if (g) {
-      el.textContent = `✓ 既存Gist（${g.substring(0, 10)}...）を使用`;
+  function updateAccountInfo() {
+    const el = document.getElementById('accountInfo');
+    if (currentUser) {
+      el.innerHTML = `<b>${currentUser.email}</b> でログイン中 ✓`;
       el.className = 'preview-box success';
     } else {
-      el.textContent = '✓ 新規Gistを自動作成します（プライベート）';
+      el.textContent = '未ログイン';
       el.className = 'preview-box';
     }
   }
-  function updateShareInfo() {
-    if (ghToken && gistId) {
-      document.getElementById('shareInfoSection').classList.remove('hidden');
-      document.getElementById('shareToken').textContent = ghToken;
-      document.getElementById('shareGistId').textContent = gistId;
-    } else {
-      document.getElementById('shareInfoSection').classList.add('hidden');
-    }
-  }
-  document.getElementById('tokenInput').addEventListener('input', updateAuthStatus);
-  document.getElementById('gistIdInput').addEventListener('input', updateAuthStatus);
   document.getElementById('closeSettingsBtn').addEventListener('click', closeSettingsModal);
   document.getElementById('settingsModal').addEventListener('click', (e) => {
     if (e.target.id === 'settingsModal') closeSettingsModal();
   });
-  document.getElementById('saveAuthBtn').addEventListener('click', async () => {
-    const t = document.getElementById('tokenInput').value.trim();
-    const g = document.getElementById('gistIdInput').value.trim();
-    if (!t) { alert('Tokenを入力してください'); return; }
-    ghToken = t;
-    gistId = g;
-    localStorage.setItem('tracker_gh_token', t);
-    if (g) localStorage.setItem('tracker_gist_id', g);
-    else localStorage.removeItem('tracker_gist_id');
-
-    const el = document.getElementById('authStatus');
-    el.textContent = '⏳ 接続テスト中...';
-    el.className = 'preview-box';
-    
-    let ok;
-    if (gistId) {
-      ok = await fetchFromGist();
-    } else {
-      ok = await pushToGist();
-    }
-    
-    if (ok) {
-      el.textContent = '🎉 接続成功！';
-      el.className = 'preview-box success';
-      updateShareInfo();
-      renderAll();
-    } else {
-      el.textContent = '❌ 接続失敗。Tokenを確認してください（Gists権限が必要）';
-      el.className = 'preview-box error';
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    if (!confirm('ログアウトしますか？')) return;
+    try {
+      if (firestoreUnsubscribe) {
+        firestoreUnsubscribe();
+        firestoreUnsubscribe = null;
+      }
+      await firebaseAuth.signOut();
+      closeSettingsModal();
+    } catch (err) {
+      alert('ログアウトに失敗しました: ' + err.message);
     }
   });
   window.openSettingsModal = openSettingsModal;
