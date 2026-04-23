@@ -768,6 +768,9 @@
       const analyticsBtn = container.querySelector('[data-fixed-analytics]');
       if (analyticsBtn) {
         analyticsBtn.addEventListener('click', async () => {
+          console.log('[一斉取得] ボタンクリック');
+          console.log('[一斉取得] OAuth:', isOAuthAuthenticated(), 'トークン長:', oauthAccessToken?.length);
+          console.log('[一斉取得] 動画数:', vids.length);
           if (!isOAuthAuthenticated()) {
             alert('⚠️ まず⚙️設定から「🔐 YouTube連携」してください');
             return;
@@ -780,6 +783,7 @@
           for (let i = 0; i < vids.length; i++) {
             const v = vids[i];
             try {
+              console.log(`[一斉取得] ${i+1}/${vids.length}: ${v.title}`);
               const data = await fetchAnalytics(v.videoId, v.publishedAt);
               if (data) {
                 if (!v.analyticsSnapshots) v.analyticsSnapshots = [];
@@ -795,14 +799,12 @@
               console.error(`[Analytics] ${v.videoId}:`, err);
               fail++;
               errors.push(`・${v.title.slice(0, 30)}: ${err.message}`);
-              // OAuth期限切れなら中断
               if (err.message.includes('401') || err.message.includes('Unauthorized') || err.message.includes('invalid_token')) {
-                errors.push('⚠️ OAuth認証が切れました。⚙️設定から再連携してください。');
+                errors.push('⚠️ OAuth認証が切れました。再連携してください。');
                 break;
               }
             }
             analyticsBtn.textContent = '⏳ 取得中... (' + (i+1) + '/' + vids.length + ')';
-            // API レート制限対策で少し待つ
             await new Promise(r => setTimeout(r, 300));
           }
           await saveFirestoreData();
@@ -1313,17 +1315,36 @@
   // YouTube Analytics API で詳細データ取得
   // 自チャンネルのみ（OAuth必須）
   // 注：impressions/CTRはAnalytics APIでは取得不可（YouTube Studio専用）
-  async function fetchAnalytics(videoId, videoPublishedAt) {
+  async function fetchAnalytics(videoId, videoPublishedAt, options = {}) {
     if (!isOAuthAuthenticated()) {
       throw new Error('OAuth未認証。設定から連携してください');
     }
-    const startDate = new Date(videoPublishedAt).toISOString().slice(0, 10);
-    const endDate = new Date().toISOString().slice(0, 10);
+    // 期間指定（デフォルト：投稿日〜今日の全期間）
+    // options.period = 'all' | '28d' | '7d' | '1d'
+    const period = options.period || 'all';
+    let startDate, endDate;
+    endDate = new Date().toISOString().slice(0, 10);
+    if (period === '28d') {
+      const d = new Date(); d.setDate(d.getDate() - 28);
+      startDate = d.toISOString().slice(0, 10);
+    } else if (period === '7d') {
+      const d = new Date(); d.setDate(d.getDate() - 7);
+      startDate = d.toISOString().slice(0, 10);
+    } else if (period === '1d') {
+      const d = new Date(); d.setDate(d.getDate() - 1);
+      startDate = d.toISOString().slice(0, 10);
+    } else {
+      // all：投稿日〜今日
+      startDate = new Date(videoPublishedAt).toISOString().slice(0, 10);
+    }
+    // 投稿日よりも古い日付は使えない
+    const pubDate = new Date(videoPublishedAt).toISOString().slice(0, 10);
+    if (startDate < pubDate) startDate = pubDate;
+    
     const url = new URL('https://youtubeanalytics.googleapis.com/v2/reports');
     url.searchParams.set('ids', 'channel==MINE');
     url.searchParams.set('startDate', startDate);
     url.searchParams.set('endDate', endDate);
-    // 利用可能なメトリクスのみ（impressions/CTRはAnalytics APIでは動画単位で取得不可）
     url.searchParams.set('metrics', 'views,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,likes,subscribersGained,subscribersLost,shares,comments');
     url.searchParams.set('filters', `video==${videoId}`);
     const res = await fetch(url, {
@@ -1339,13 +1360,16 @@
     return {
       views,
       watchMinutes,
-      avgDuration, // 秒
-      avgPercentage, // %
+      avgDuration,
+      avgPercentage,
       likes,
       subGained,
       subLost,
       shares,
-      comments
+      comments,
+      period,
+      startDate,
+      endDate
     };
   }
 
@@ -1476,6 +1500,9 @@
     const avgMin = Math.floor((a.avgDuration || 0) / 60);
     const avgSec = Math.round((a.avgDuration || 0) % 60);
     const netSubs = (a.subGained || 0) - (a.subLost || 0);
+    const periodLabel = a.startDate && a.endDate 
+      ? `${a.startDate} 〜 ${a.endDate}` 
+      : '投稿〜現在';
     return `
       <div style="padding: 12px; background: var(--dim-bg); border: 2px solid var(--card-border); border-radius: 10px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
@@ -1484,6 +1511,9 @@
             <span style="font-size: 10px; color: var(--text-faint);">取得: ${fetched}</span>
             <button class="btn btn-sm" data-refetch-analytics>🔄 再取得</button>
           </div>
+        </div>
+        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">
+          📅 集計期間: <b>${periodLabel}</b>
         </div>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px;">
           <div class="analytics-stat">
