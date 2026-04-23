@@ -174,6 +174,8 @@
   
   .graph-type-btn { opacity: 0.7; }
   .graph-type-btn.active { background: var(--accent-pink); color: var(--on-accent); opacity: 1; }
+  .graph-period-btn, .graph-offset-btn { opacity: 0.65; font-size: 11px; padding: 4px 8px; }
+  .graph-period-btn.active, .graph-offset-btn.active { background: var(--accent-teal); color: var(--on-accent); opacity: 1; }
 </style>
 </head>
 <body>
@@ -819,18 +821,34 @@
         </div>
         <div class="section">
           <h3 class="section-title">📈 再生数グラフ</h3>
-          <div class="graph-controls" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;">
+          <div class="graph-controls" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;">
             <button class="btn btn-sm graph-type-btn active" data-graph-type="scatter" data-graph-tab="${tabKey}">📊 散布図</button>
             <button class="btn btn-sm graph-type-btn" data-graph-type="bar" data-graph-tab="${tabKey}">📊 棒グラフ</button>
-            <button class="btn btn-sm graph-type-btn" data-graph-type="cumulative" data-graph-tab="${tabKey}">📈 累積</button>
+            <button class="btn btn-sm graph-type-btn" data-graph-type="line" data-graph-tab="${tabKey}">📈 折れ線</button>
             <span style="flex: 1;"></span>
             <label style="font-size: 11px; display: flex; align-items: center; gap: 4px;">
               <input type="checkbox" class="graph-log-scale" data-graph-tab="${tabKey}"> 対数軸
             </label>
           </div>
+          <div class="graph-controls" style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; align-items: center;">
+            <span style="font-size: 11px; color: var(--text-muted); margin-right: 4px;">📅期間:</span>
+            <button class="btn btn-sm graph-period-btn active" data-graph-period="all" data-graph-tab="${tabKey}">全期間</button>
+            <button class="btn btn-sm graph-period-btn" data-graph-period="6m" data-graph-tab="${tabKey}">6ヶ月</button>
+            <button class="btn btn-sm graph-period-btn" data-graph-period="3m" data-graph-tab="${tabKey}">3ヶ月</button>
+            <button class="btn btn-sm graph-period-btn" data-graph-period="1m" data-graph-tab="${tabKey}">1ヶ月</button>
+          </div>
+          <div class="graph-controls" style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; align-items: center;">
+            <span style="font-size: 11px; color: var(--text-muted); margin-right: 4px;">⏱️時点:</span>
+            <button class="btn btn-sm graph-offset-btn active" data-graph-offset="latest" data-graph-tab="${tabKey}">最新</button>
+            <button class="btn btn-sm graph-offset-btn" data-graph-offset="1h" data-graph-tab="${tabKey}">1時間後</button>
+            <button class="btn btn-sm graph-offset-btn" data-graph-offset="1d" data-graph-tab="${tabKey}">1日後</button>
+            <button class="btn btn-sm graph-offset-btn" data-graph-offset="1w" data-graph-tab="${tabKey}">1週間後</button>
+            <button class="btn btn-sm graph-offset-btn" data-graph-offset="1m" data-graph-tab="${tabKey}">1ヶ月後</button>
+          </div>
           <div class="chart-wrap" style="height: 360px;">
             <canvas id="chart-${tabKey}"></canvas>
           </div>
+          <div id="chart-info-${tabKey}" style="font-size: 11px; color: var(--text-muted); margin-top: 6px;"></div>
         </div>
         <div class="section">
           <h3 class="section-title">🎬 動画を追加取得</h3>
@@ -1033,6 +1051,36 @@
                 </label>
                 <button class="btn btn-sm" data-rival-refresh="${ch.id}">🔄 取得</button>
               </div>
+              ${vids.length > 0 ? `
+                <div style="margin-bottom: 10px;">
+                  <div class="graph-controls" style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px;">
+                    <button class="btn btn-sm graph-type-btn active" data-graph-type="scatter" data-graph-tab="rival-${ch.id}">📊 散布図</button>
+                    <button class="btn btn-sm graph-type-btn" data-graph-type="bar" data-graph-tab="rival-${ch.id}">📊 棒</button>
+                    <button class="btn btn-sm graph-type-btn" data-graph-type="line" data-graph-tab="rival-${ch.id}">📈 折れ線</button>
+                    <span style="flex: 1;"></span>
+                    <label style="font-size: 10px; display: flex; align-items: center; gap: 4px;">
+                      <input type="checkbox" class="graph-log-scale" data-graph-tab="rival-${ch.id}"> 対数軸
+                    </label>
+                  </div>
+                  <div class="graph-controls" style="display: flex; gap: 3px; flex-wrap: wrap; margin-bottom: 6px; align-items: center;">
+                    <span style="font-size: 10px; color: var(--text-muted);">📅</span>
+                    <button class="btn btn-sm graph-period-btn active" data-graph-period="all" data-graph-tab="rival-${ch.id}">全</button>
+                    <button class="btn btn-sm graph-period-btn" data-graph-period="6m" data-graph-tab="rival-${ch.id}">6M</button>
+                    <button class="btn btn-sm graph-period-btn" data-graph-period="3m" data-graph-tab="rival-${ch.id}">3M</button>
+                    <button class="btn btn-sm graph-period-btn" data-graph-period="1m" data-graph-tab="rival-${ch.id}">1M</button>
+                    <span style="font-size: 10px; color: var(--text-muted); margin-left: 6px;">⏱️</span>
+                    <button class="btn btn-sm graph-offset-btn active" data-graph-offset="latest" data-graph-tab="rival-${ch.id}">最新</button>
+                    <button class="btn btn-sm graph-offset-btn" data-graph-offset="1h" data-graph-tab="rival-${ch.id}">1h</button>
+                    <button class="btn btn-sm graph-offset-btn" data-graph-offset="1d" data-graph-tab="rival-${ch.id}">1d</button>
+                    <button class="btn btn-sm graph-offset-btn" data-graph-offset="1w" data-graph-tab="rival-${ch.id}">1w</button>
+                    <button class="btn btn-sm graph-offset-btn" data-graph-offset="1m" data-graph-tab="rival-${ch.id}">1m</button>
+                  </div>
+                  <div class="chart-wrap" style="height: 280px;">
+                    <canvas id="chart-rival-${ch.id}"></canvas>
+                  </div>
+                  <div id="chart-info-rival-${ch.id}" style="font-size: 10px; color: var(--text-muted); margin-top: 4px;"></div>
+                </div>
+              ` : ''}
               ${vids.length === 0 
                 ? `<div class="empty-state"><div class="empty-text" style="font-size: 12px;">動画未取得</div></div>`
                 : renderVideoListHtml(vids)}
@@ -1102,6 +1150,18 @@
     // 個別削除
     container.querySelectorAll('[data-rival-remove]').forEach(btn => {
       btn.addEventListener('click', () => removeRivalChannel(btn.dataset.rivalRemove));
+    });
+    
+    // 各競合チャンネルのグラフ描画
+    const RIVAL_COLORS = ['#6bb5ff', '#b983ff', '#5eb88a', '#ff9a3c', '#94b3fd', '#ffd93d'];
+    channels.rivals.forEach((r, idx) => {
+      const ch = r.info;
+      const vids = videos.filter(v => v.channelId === ch.id);
+      if (vids.length === 0) return;
+      const rivalTabKey = 'rival-' + ch.id;
+      const color = RIVAL_COLORS[idx % RIVAL_COLORS.length];
+      renderPlaybackChart(rivalTabKey, vids, { color });
+      attachGraphControls(rivalTabKey, vids, { color });
     });
     
     // ヘッダークリックで開閉
@@ -1769,122 +1829,284 @@
   }
   
   // ==== 再生数グラフ（タブ別・比較用） ====
-  // 各タブのChartインスタンス管理
-  const tabCharts = {}; // key: tabKey or 'compare', value: Chart instance
-  const graphState = {}; // key: tabKey, value: { type: 'scatter'|'bar'|'cumulative', logScale: bool }
+  const tabCharts = {};
+  const graphState = {}; // key: tabKey, value: { type, logScale, period, offset }
   
   function getGraphState(tabKey) {
     if (!graphState[tabKey]) {
-      graphState[tabKey] = { type: 'scatter', logScale: false };
+      graphState[tabKey] = { type: 'scatter', logScale: false, period: 'all', offset: 'latest' };
     }
     return graphState[tabKey];
+  }
+  
+  // 動画からスナップショット値を取得（X軸モードに応じて）
+  // offset: 'latest' | '1h' | '1d' | '1w' | '1m'
+  function getSnapshotValue(video, offset) {
+    if (!video.snapshots || video.snapshots.length === 0) return null;
+    if (offset === 'latest') {
+      return video.snapshots[video.snapshots.length - 1];
+    }
+    // targetOffset が一致するスナップショットを返す（完全合致）
+    const matched = video.snapshots.find(s => s.targetOffset === offset);
+    return matched || null;
+  }
+  
+  // 期間フィルター：指定期間内に投稿された動画のみを返す
+  function filterByPeriod(videos, period) {
+    if (period === 'all') return videos;
+    const now = Date.now();
+    let cutoff;
+    if (period === '1m') cutoff = now - 30 * 24 * 3600000;
+    else if (period === '3m') cutoff = now - 90 * 24 * 3600000;
+    else if (period === '6m') cutoff = now - 180 * 24 * 3600000;
+    else return videos;
+    return videos.filter(v => new Date(v.publishedAt).getTime() >= cutoff);
   }
   
   function renderPlaybackChart(tabKey, videosForChart, opts = {}) {
     const canvas = document.getElementById('chart-' + tabKey);
     if (!canvas) return;
     const state = getGraphState(tabKey);
+    const infoEl = document.getElementById('chart-info-' + tabKey);
     
     // 既存chart破棄
     if (tabCharts[tabKey]) { tabCharts[tabKey].destroy(); tabCharts[tabKey] = null; }
     
-    if (!videosForChart || videosForChart.length === 0) {
-      canvas.parentElement.innerHTML = `<div class="empty-state" style="padding: 40px 20px;"><div class="empty-text" style="font-size: 12px; color: var(--text-muted);">表示するデータがありません</div></div>`;
+    // 期間フィルター適用
+    const filtered = filterByPeriod(videosForChart || [], state.period);
+    
+    if (filtered.length === 0) {
+      const parent = canvas.parentElement;
+      // canvasを残しつつ、重ねて空メッセージ表示
+      canvas.style.display = 'none';
+      let emptyEl = parent.querySelector('.graph-empty');
+      if (!emptyEl) {
+        emptyEl = document.createElement('div');
+        emptyEl.className = 'graph-empty empty-state';
+        emptyEl.style.padding = '40px 20px';
+        parent.appendChild(emptyEl);
+      }
+      emptyEl.innerHTML = `<div class="empty-text" style="font-size: 12px; color: var(--text-muted);">${state.period === 'all' ? '表示するデータがありません' : 'この期間に該当する動画がありません'}</div>`;
+      if (infoEl) infoEl.textContent = '';
       return;
     }
+    
+    // canvas再表示＆空メッセージ削除
+    canvas.style.display = '';
+    const existingEmpty = canvas.parentElement.querySelector('.graph-empty');
+    if (existingEmpty) existingEmpty.remove();
     
     const ctx = canvas.getContext('2d');
     const accent = opts.color || '#ff6b9d';
     
+    // 複数datasets対応（比較タブ用）
+    let datasetsForChart;
+    let allPoints = []; // 全ての点（棒グラフのラベル用）
+    let matchedCount = 0;
+    let totalCount = 0;
+    
+    if (opts.channelGroups) {
+      // 比較タブ：チャンネルごとにgroup分け
+      datasetsForChart = [];
+      for (const group of opts.channelGroups) {
+        const groupFiltered = filterByPeriod(group.videos, state.period);
+        totalCount += groupFiltered.length;
+        const groupPoints = [];
+        for (const v of groupFiltered) {
+          const snap = getSnapshotValue(v, state.offset);
+          if (!snap) continue;
+          matchedCount++;
+          groupPoints.push({
+            x: new Date(v.publishedAt).getTime(),
+            y: snap.views,
+            title: v.title, videoId: v.videoId, vid: v.id, channelTitle: v.channelTitle
+          });
+        }
+        allPoints = allPoints.concat(groupPoints);
+        datasetsForChart.push({
+          label: group.label,
+          data: groupPoints,
+          backgroundColor: group.color,
+          borderColor: group.color,
+          pointRadius: 5,
+          pointHoverRadius: 8,
+          borderWidth: 2,
+          tension: 0.15,
+          fill: false
+        });
+      }
+    } else {
+      // 単一チャンネル
+      totalCount = filtered.length;
+      const points = [];
+      for (const v of filtered) {
+        const snap = getSnapshotValue(v, state.offset);
+        if (!snap) continue;
+        matchedCount++;
+        points.push({
+          x: new Date(v.publishedAt).getTime(),
+          y: snap.views,
+          title: v.title, videoId: v.videoId, vid: v.id, channelTitle: v.channelTitle
+        });
+      }
+      allPoints = points;
+      datasetsForChart = [{
+        label: '再生数',
+        data: points,
+        backgroundColor: accent,
+        borderColor: accent,
+        pointRadius: 5,
+        pointHoverRadius: 8,
+        borderWidth: 2,
+        tension: 0.15,
+        fill: false
+      }];
+    }
+    
+    // マッチング情報表示
+    if (infoEl) {
+      if (state.offset === 'latest') {
+        infoEl.textContent = `📊 ${totalCount}本の動画を表示中（期間フィルター適用済み）`;
+      } else {
+        const offsetLabel = { '1h': '1時間後', '1d': '1日後', '1w': '1週間後', '1m': '1ヶ月後' }[state.offset] || '';
+        if (matchedCount === 0) {
+          infoEl.innerHTML = `💡 <b>${offsetLabel}</b>の時点のデータが揃っている動画はまだありません。<br>自動取得機能（GitHub Actions）の実装後、${offsetLabel}を迎えた動画から順に表示されます。`;
+        } else {
+          infoEl.textContent = `📊 ${totalCount}本中 ${matchedCount}本 に「${offsetLabel}」のデータあり`;
+        }
+      }
+    }
+    
+    // データが1点もない場合
+    if (allPoints.length === 0) {
+      canvas.style.display = 'none';
+      const parent = canvas.parentElement;
+      let emptyEl = parent.querySelector('.graph-empty');
+      if (!emptyEl) {
+        emptyEl = document.createElement('div');
+        emptyEl.className = 'graph-empty empty-state';
+        emptyEl.style.padding = '40px 20px';
+        parent.appendChild(emptyEl);
+      }
+      emptyEl.innerHTML = `<div class="empty-text" style="font-size: 12px; color: var(--text-muted);">選択された時点のデータがありません</div>`;
+      return;
+    }
+    
     let chartConfig;
+    const commonScales = {
+      x: {
+        type: 'time',
+        time: { unit: 'month', displayFormats: { month: 'yyyy/MM' } },
+        title: { display: true, text: '投稿日' }
+      },
+      y: {
+        type: state.logScale ? 'logarithmic' : 'linear',
+        title: { display: true, text: '再生数' },
+        beginAtZero: !state.logScale
+      }
+    };
+    
+    const commonTooltip = {
+      callbacks: {
+        label: (item) => {
+          const d = item.raw;
+          const date = new Date(d.x);
+          const dateStr = `${date.getFullYear()}/${date.getMonth()+1}/${date.getDate()}`;
+          return [
+            d.channelTitle ? `[${d.channelTitle}]` : '',
+            d.title,
+            `投稿日: ${dateStr}`,
+            `再生数: ${d.y.toLocaleString()}`
+          ].filter(x => x);
+        }
+      }
+    };
     
     if (state.type === 'scatter') {
-      // 散布図：投稿日×再生数
-      const points = videosForChart.map(v => {
-        const lastSnap = v.snapshots && v.snapshots.length > 0 ? v.snapshots[v.snapshots.length - 1] : { views: 0 };
-        return { x: new Date(v.publishedAt).getTime(), y: lastSnap.views, title: v.title, videoId: v.videoId, vid: v.id, channelTitle: v.channelTitle };
-      });
       chartConfig = {
         type: 'scatter',
-        data: {
-          datasets: opts.datasets || [{
-            label: '再生数',
-            data: points,
-            backgroundColor: accent,
-            borderColor: accent,
-            pointRadius: 6,
-            pointHoverRadius: 9
-          }]
-        },
+        data: { datasets: datasetsForChart },
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: {
-            legend: { display: (opts.datasets && opts.datasets.length > 1) },
-            tooltip: {
-              callbacks: {
-                label: (item) => {
-                  const d = item.raw;
-                  const date = new Date(d.x);
-                  const dateStr = `${date.getFullYear()}/${date.getMonth()+1}/${date.getDate()}`;
-                  return [
-                    d.channelTitle ? `[${d.channelTitle}]` : '',
-                    d.title,
-                    `投稿日: ${dateStr}`,
-                    `再生数: ${d.y.toLocaleString()}`
-                  ].filter(x => x);
-                }
-              }
-            }
+            legend: { display: datasetsForChart.length > 1 },
+            tooltip: commonTooltip
           },
-          scales: {
-            x: {
-              type: 'time',
-              time: { unit: 'month', displayFormats: { month: 'yyyy/MM' } },
-              title: { display: true, text: '投稿日' }
-            },
-            y: {
-              type: state.logScale ? 'logarithmic' : 'linear',
-              title: { display: true, text: '再生数' },
-              beginAtZero: !state.logScale
-            }
-          },
+          scales: commonScales,
           onClick: (evt, elements) => {
             if (elements.length > 0) {
               const idx = elements[0].index;
               const dsIdx = elements[0].datasetIndex;
-              const d = chartConfig.data.datasets[dsIdx].data[idx];
-              if (d.vid) showVideoDetail(d.vid);
+              const d = datasetsForChart[dsIdx].data[idx];
+              if (d && d.vid) showVideoDetail(d.vid);
+            }
+          }
+        }
+      };
+    } else if (state.type === 'line') {
+      // 折れ線：投稿日でソートして線でつなぐ
+      const lineDatasets = datasetsForChart.map(ds => ({
+        ...ds,
+        data: [...ds.data].sort((a, b) => a.x - b.x),
+        showLine: true,
+        fill: false
+      }));
+      chartConfig = {
+        type: 'scatter', // scatter + showLine で折れ線
+        data: { datasets: lineDatasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { display: datasetsForChart.length > 1 },
+            tooltip: commonTooltip
+          },
+          scales: commonScales,
+          onClick: (evt, elements) => {
+            if (elements.length > 0) {
+              const idx = elements[0].index;
+              const dsIdx = elements[0].datasetIndex;
+              const d = lineDatasets[dsIdx].data[idx];
+              if (d && d.vid) showVideoDetail(d.vid);
             }
           }
         }
       };
     } else if (state.type === 'bar') {
-      // 棒グラフ：動画別（投稿日順）
-      const sorted = [...videosForChart].sort((a, b) => new Date(a.publishedAt) - new Date(b.publishedAt));
+      // 棒グラフ：投稿日順で1本ずつ
+      const sorted = [...allPoints].sort((a, b) => a.x - b.x);
       chartConfig = {
         type: 'bar',
         data: {
-          labels: sorted.map(v => {
-            const d = new Date(v.publishedAt);
+          labels: sorted.map(p => {
+            const d = new Date(p.x);
             return `${d.getMonth()+1}/${d.getDate()}`;
           }),
-          datasets: opts.barDatasets || [{
+          datasets: [{
             label: '再生数',
-            data: sorted.map(v => {
-              const lastSnap = v.snapshots && v.snapshots.length > 0 ? v.snapshots[v.snapshots.length - 1] : { views: 0 };
-              return lastSnap.views;
+            data: sorted.map(p => p.y),
+            backgroundColor: sorted.map(p => {
+              // 比較タブならチャンネル色を使う
+              if (opts.channelGroups) {
+                for (const g of opts.channelGroups) {
+                  if (g.videos.some(v => v.id === p.vid)) return g.color;
+                }
+                return accent;
+              }
+              return accent;
             }),
-            backgroundColor: accent,
             borderColor: accent
           }]
         },
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: {
-            legend: { display: (opts.barDatasets && opts.barDatasets.length > 1) },
+            legend: { display: false },
             tooltip: {
               callbacks: {
-                title: (items) => sorted[items[0].dataIndex]?.title || '',
+                title: (items) => {
+                  const p = sorted[items[0].dataIndex];
+                  return [p.channelTitle ? `[${p.channelTitle}]` : '', p.title].filter(x => x).join(' ');
+                },
                 label: (item) => `再生数: ${item.parsed.y.toLocaleString()}`
               }
             }
@@ -1899,58 +2121,8 @@
           },
           onClick: (evt, elements) => {
             if (elements.length > 0) {
-              const v = sorted[elements[0].index];
-              if (v) showVideoDetail(v.id);
-            }
-          }
-        }
-      };
-    } else if (state.type === 'cumulative') {
-      // 累積折れ線：投稿日順に並べた再生数の累積
-      const sorted = [...videosForChart].sort((a, b) => new Date(a.publishedAt) - new Date(b.publishedAt));
-      let cumSum = 0;
-      const points = sorted.map(v => {
-        const lastSnap = v.snapshots && v.snapshots.length > 0 ? v.snapshots[v.snapshots.length - 1] : { views: 0 };
-        cumSum += lastSnap.views;
-        return { x: new Date(v.publishedAt).getTime(), y: cumSum, title: v.title };
-      });
-      chartConfig = {
-        type: 'line',
-        data: {
-          datasets: opts.cumulativeDatasets || [{
-            label: '累積再生数',
-            data: points,
-            borderColor: accent,
-            backgroundColor: accent + '33',
-            borderWidth: 3,
-            tension: 0.2,
-            fill: true,
-            pointRadius: 4
-          }]
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: {
-            legend: { display: (opts.cumulativeDatasets && opts.cumulativeDatasets.length > 1) },
-            tooltip: {
-              callbacks: {
-                label: (item) => {
-                  const d = item.raw;
-                  return [`${d.title}`, `累積: ${d.y.toLocaleString()}`];
-                }
-              }
-            }
-          },
-          scales: {
-            x: {
-              type: 'time',
-              time: { unit: 'month', displayFormats: { month: 'yyyy/MM' } },
-              title: { display: true, text: '投稿日' }
-            },
-            y: {
-              type: state.logScale ? 'logarithmic' : 'linear',
-              title: { display: true, text: '累積再生数' },
-              beginAtZero: !state.logScale
+              const p = sorted[elements[0].index];
+              if (p && p.vid) showVideoDetail(p.vid);
             }
           }
         }
@@ -1960,17 +2132,18 @@
     tabCharts[tabKey] = new Chart(ctx, chartConfig);
   }
   
-  // グラフコントロール（タブ別・比較共通）のイベント紐付け
+  // グラフコントロールのイベント紐付け（タブ別）
   function attachGraphControls(tabKey, videosForChart, opts = {}) {
+    // グラフタイプ
     document.querySelectorAll(`[data-graph-tab="${tabKey}"].graph-type-btn`).forEach(btn => {
       btn.addEventListener('click', () => {
         const state = getGraphState(tabKey);
         state.type = btn.dataset.graphType;
-        // ボタンのactive更新
         document.querySelectorAll(`[data-graph-tab="${tabKey}"].graph-type-btn`).forEach(b => b.classList.toggle('active', b === btn));
         renderPlaybackChart(tabKey, videosForChart, opts);
       });
     });
+    // 対数軸
     const logToggle = document.querySelector(`[data-graph-tab="${tabKey}"].graph-log-scale`);
     if (logToggle) {
       logToggle.addEventListener('change', () => {
@@ -1979,6 +2152,24 @@
         renderPlaybackChart(tabKey, videosForChart, opts);
       });
     }
+    // 期間
+    document.querySelectorAll(`[data-graph-tab="${tabKey}"].graph-period-btn`).forEach(btn => {
+      btn.addEventListener('click', () => {
+        const state = getGraphState(tabKey);
+        state.period = btn.dataset.graphPeriod;
+        document.querySelectorAll(`[data-graph-tab="${tabKey}"].graph-period-btn`).forEach(b => b.classList.toggle('active', b === btn));
+        renderPlaybackChart(tabKey, videosForChart, opts);
+      });
+    });
+    // X軸モード
+    document.querySelectorAll(`[data-graph-tab="${tabKey}"].graph-offset-btn`).forEach(btn => {
+      btn.addEventListener('click', () => {
+        const state = getGraphState(tabKey);
+        state.offset = btn.dataset.graphOffset;
+        document.querySelectorAll(`[data-graph-tab="${tabKey}"].graph-offset-btn`).forEach(b => b.classList.toggle('active', b === btn));
+        renderPlaybackChart(tabKey, videosForChart, opts);
+      });
+    });
   }
   
   // ==== 比較タブ ====
@@ -2006,125 +2197,73 @@
             <div class="empty-text">まだ動画が登録されていません</div>
           </div>
         ` : `
-          <div class="graph-controls" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;">
+          <div class="graph-controls" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;">
             <button class="btn btn-sm graph-type-btn active" data-graph-type="scatter" data-graph-tab="compare">📊 散布図</button>
             <button class="btn btn-sm graph-type-btn" data-graph-type="bar" data-graph-tab="compare">📊 棒グラフ</button>
-            <button class="btn btn-sm graph-type-btn" data-graph-type="cumulative" data-graph-tab="compare">📈 累積</button>
+            <button class="btn btn-sm graph-type-btn" data-graph-type="line" data-graph-tab="compare">📈 折れ線</button>
             <span style="flex: 1;"></span>
             <label style="font-size: 11px; display: flex; align-items: center; gap: 4px;">
               <input type="checkbox" class="graph-log-scale" data-graph-tab="compare"> 対数軸
             </label>
           </div>
+          <div class="graph-controls" style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; align-items: center;">
+            <span style="font-size: 11px; color: var(--text-muted); margin-right: 4px;">📅期間:</span>
+            <button class="btn btn-sm graph-period-btn active" data-graph-period="all" data-graph-tab="compare">全期間</button>
+            <button class="btn btn-sm graph-period-btn" data-graph-period="6m" data-graph-tab="compare">6ヶ月</button>
+            <button class="btn btn-sm graph-period-btn" data-graph-period="3m" data-graph-tab="compare">3ヶ月</button>
+            <button class="btn btn-sm graph-period-btn" data-graph-period="1m" data-graph-tab="compare">1ヶ月</button>
+          </div>
+          <div class="graph-controls" style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; align-items: center;">
+            <span style="font-size: 11px; color: var(--text-muted); margin-right: 4px;">⏱️時点:</span>
+            <button class="btn btn-sm graph-offset-btn active" data-graph-offset="latest" data-graph-tab="compare">最新</button>
+            <button class="btn btn-sm graph-offset-btn" data-graph-offset="1h" data-graph-tab="compare">1時間後</button>
+            <button class="btn btn-sm graph-offset-btn" data-graph-offset="1d" data-graph-tab="compare">1日後</button>
+            <button class="btn btn-sm graph-offset-btn" data-graph-offset="1w" data-graph-tab="compare">1週間後</button>
+            <button class="btn btn-sm graph-offset-btn" data-graph-offset="1m" data-graph-tab="compare">1ヶ月後</button>
+          </div>
           <div class="chart-wrap" style="height: 480px;">
             <canvas id="chart-compare"></canvas>
           </div>
+          <div id="chart-info-compare" style="font-size: 11px; color: var(--text-muted); margin-top: 6px;"></div>
         `}
       </div>
     `;
     
     if (!hasData) return;
     
-    // 比較グラフは datasets 形式で複数チャンネル同時表示
+    // 比較グラフ用のチャンネルグループ構築
     const COLORS = ['#ff6b9d', '#4ecdc4', '#ffd93d', '#6bb5ff', '#b983ff', '#5eb88a', '#ff9a3c', '#94b3fd'];
     let colorIdx = 0;
-    
-    // 散布図用 datasets
-    const scatterDatasets = [];
-    const barDatasets = []; // 棒グラフ用（チャンネルごとに色分け）
-    const cumulativeDatasets = [];
-    
-    function mkPoints(vids) {
-      return vids.map(v => {
-        const lastSnap = v.snapshots && v.snapshots.length > 0 ? v.snapshots[v.snapshots.length - 1] : { views: 0 };
-        return { x: new Date(v.publishedAt).getTime(), y: lastSnap.views, title: v.title, videoId: v.videoId, vid: v.id, channelTitle: v.channelTitle };
-      });
-    }
-    
-    function mkCumulative(vids) {
-      const sorted = [...vids].sort((a, b) => new Date(a.publishedAt) - new Date(b.publishedAt));
-      let cumSum = 0;
-      return sorted.map(v => {
-        const lastSnap = v.snapshots && v.snapshots.length > 0 ? v.snapshots[v.snapshots.length - 1] : { views: 0 };
-        cumSum += lastSnap.views;
-        return { x: new Date(v.publishedAt).getTime(), y: cumSum, title: v.title };
-      });
-    }
+    const channelGroups = [];
     
     if (copiVids.length > 0) {
-      const color = COLORS[colorIdx++ % COLORS.length];
-      scatterDatasets.push({
+      channelGroups.push({
         label: '🌙 ' + (channels.copi?.info?.title || 'コピプラネット'),
-        data: mkPoints(copiVids),
-        backgroundColor: color, borderColor: color, pointRadius: 5, pointHoverRadius: 8
-      });
-      cumulativeDatasets.push({
-        label: '🌙 ' + (channels.copi?.info?.title || 'コピプラネット'),
-        data: mkCumulative(copiVids),
-        borderColor: color, backgroundColor: color + '22', borderWidth: 2, tension: 0.2, fill: false, pointRadius: 3
+        videos: copiVids,
+        color: COLORS[colorIdx++ % COLORS.length]
       });
     }
     if (waonVids.length > 0) {
-      const color = COLORS[colorIdx++ % COLORS.length];
-      scatterDatasets.push({
+      channelGroups.push({
         label: '🍁 ' + (channels.waon?.info?.title || '和音GAMES'),
-        data: mkPoints(waonVids),
-        backgroundColor: color, borderColor: color, pointRadius: 5, pointHoverRadius: 8
-      });
-      cumulativeDatasets.push({
-        label: '🍁 ' + (channels.waon?.info?.title || '和音GAMES'),
-        data: mkCumulative(waonVids),
-        borderColor: color, backgroundColor: color + '22', borderWidth: 2, tension: 0.2, fill: false, pointRadius: 3
+        videos: waonVids,
+        color: COLORS[colorIdx++ % COLORS.length]
       });
     }
     for (const chId of Object.keys(rivalVidsByChannel)) {
       const info = rivalVidsByChannel[chId];
-      const color = COLORS[colorIdx++ % COLORS.length];
-      scatterDatasets.push({
+      channelGroups.push({
         label: '👀 ' + info.channelTitle,
-        data: mkPoints(info.videos),
-        backgroundColor: color, borderColor: color, pointRadius: 5, pointHoverRadius: 8
-      });
-      cumulativeDatasets.push({
-        label: '👀 ' + info.channelTitle,
-        data: mkCumulative(info.videos),
-        borderColor: color, backgroundColor: color + '22', borderWidth: 2, tension: 0.2, fill: false, pointRadius: 3
+        videos: info.videos,
+        color: COLORS[colorIdx++ % COLORS.length]
       });
     }
     
-    // 全動画（棒グラフはラベル共通のため扱いが違う）
-    const allVids = [...copiVids, ...waonVids];
-    for (const chId of Object.keys(rivalVidsByChannel)) allVids.push(...rivalVidsByChannel[chId].videos);
+    // 全動画リスト（フィルタ・棒グラフ用）
+    const allVids = channelGroups.flatMap(g => g.videos);
     
-    // 棒グラフ用の datasets を散布図と同じチャンネルごとに、x軸（日付）を共通で使うとデータがズレるので、
-    // bar グラフは全動画を投稿日順に並べて、チャンネル別に色を変える dataset にする
-    const sortedAll = [...allVids].sort((a, b) => new Date(a.publishedAt) - new Date(b.publishedAt));
-    const bgColors = sortedAll.map(v => {
-      if (v.tabKey === 'copi') return COLORS[0];
-      if (v.tabKey === 'waon') return COLORS[1];
-      const rivalIds = Object.keys(rivalVidsByChannel);
-      const idx = rivalIds.indexOf(v.channelId);
-      return COLORS[(2 + idx) % COLORS.length];
-    });
-    const singleBarDataset = [{
-      label: '再生数（チャンネル別色）',
-      data: sortedAll.map(v => {
-        const lastSnap = v.snapshots && v.snapshots.length > 0 ? v.snapshots[v.snapshots.length - 1] : { views: 0 };
-        return lastSnap.views;
-      }),
-      backgroundColor: bgColors,
-      borderColor: bgColors
-    }];
-    
-    renderPlaybackChart('compare', allVids, {
-      datasets: scatterDatasets,
-      barDatasets: singleBarDataset,
-      cumulativeDatasets: cumulativeDatasets
-    });
-    attachGraphControls('compare', allVids, {
-      datasets: scatterDatasets,
-      barDatasets: singleBarDataset,
-      cumulativeDatasets: cumulativeDatasets
-    });
+    renderPlaybackChart('compare', allVids, { channelGroups });
+    attachGraphControls('compare', allVids, { channelGroups });
   }
 
   function formatDuration(iso) {
