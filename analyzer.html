@@ -310,10 +310,22 @@
   let currentColor = localStorage.getItem('analyzer_color') || 'pink';
   
   // OAuth認証（YouTube Analytics API用）
-  // アクセストークンはメモリに保持。リロードで消えるので再認証が必要
-  let oauthAccessToken = null;
-  let oauthTokenExpireAt = 0;
-  let oauthMyChannelId = null; // 認証ユーザーの自チャンネルID
+  // sessionStorage に保存。タブを閉じるまで保持される
+  let oauthAccessToken = sessionStorage.getItem('analyzer_oauth_token') || null;
+  let oauthTokenExpireAt = parseInt(sessionStorage.getItem('analyzer_oauth_expire') || '0');
+  let oauthMyChannelId = sessionStorage.getItem('analyzer_oauth_channel') || null;
+  
+  function saveOAuthState() {
+    if (oauthAccessToken) {
+      sessionStorage.setItem('analyzer_oauth_token', oauthAccessToken);
+      sessionStorage.setItem('analyzer_oauth_expire', String(oauthTokenExpireAt));
+      if (oauthMyChannelId) sessionStorage.setItem('analyzer_oauth_channel', oauthMyChannelId);
+    } else {
+      sessionStorage.removeItem('analyzer_oauth_token');
+      sessionStorage.removeItem('analyzer_oauth_expire');
+      sessionStorage.removeItem('analyzer_oauth_channel');
+    }
+  }
   
   function applyTheme() {
     document.documentElement.setAttribute('data-theme', currentTheme);
@@ -720,6 +732,7 @@
             <div class="ci-actions">
               <button class="btn btn-sm btn-success" data-fixed-snapshot="${tabKey}">📸 スナップショット取得</button>
               <button class="btn btn-sm" data-fixed-refresh="${tabKey}">🔄 最新動画</button>
+              <button class="btn btn-sm btn-primary" data-fixed-analytics="${tabKey}">📊 詳細データ一斉取得</button>
               <button class="btn btn-sm btn-danger" data-fixed-remove="${tabKey}">🗑️ 解除</button>
             </div>
           </div>
@@ -750,6 +763,46 @@
         } finally { btn.disabled = false; btn.textContent = '🔄 最新動画'; }
       });
       container.querySelector('[data-fixed-remove]').addEventListener('click', () => removeFixedChannel(tabKey));
+      
+      // 詳細データ一斉取得
+      const analyticsBtn = container.querySelector('[data-fixed-analytics]');
+      if (analyticsBtn) {
+        analyticsBtn.addEventListener('click', async () => {
+          if (!isOAuthAuthenticated()) {
+            alert('⚠️ まず⚙️設定から「🔐 YouTube連携」してください');
+            return;
+          }
+          if (vids.length === 0) { alert('動画が登録されていません'); return; }
+          if (!confirm(`${vids.length}本の動画の詳細データ（維持率・CTR等）を取得します。\n⚠️ 自分のチャンネルかつOAuth認証済みの場合のみ動作します。`)) return;
+          analyticsBtn.disabled = true; analyticsBtn.textContent = '⏳ 取得中... (0/' + vids.length + ')';
+          let ok = 0, fail = 0;
+          for (let i = 0; i < vids.length; i++) {
+            const v = vids[i];
+            try {
+              const data = await fetchAnalytics(v.videoId, v.publishedAt);
+              if (data) {
+                if (!v.analyticsSnapshots) v.analyticsSnapshots = [];
+                const snapshot = { ...data, at: new Date().toISOString() };
+                v.analyticsSnapshots.push(snapshot);
+                v.analytics = { ...snapshot, fetchedAt: snapshot.at };
+                ok++;
+              } else {
+                fail++;
+              }
+            } catch (err) {
+              console.error(`[Analytics] ${v.videoId}:`, err);
+              fail++;
+            }
+            analyticsBtn.textContent = '⏳ 取得中... (' + (i+1) + '/' + vids.length + ')';
+            // API レート制限対策で少し待つ
+            await new Promise(r => setTimeout(r, 150));
+          }
+          await saveFirestoreData();
+          renderAll();
+          analyticsBtn.disabled = false; analyticsBtn.textContent = '📊 詳細データ一斉取得';
+          alert(`✅ 取得完了\n成功: ${ok}本\n失敗: ${fail}本（データ未反映の新着動画等）`);
+        });
+      }
       attachVideoListHandlers(container);
     } else {
       container.innerHTML = `
@@ -991,6 +1044,12 @@
       <!-- 詳細データ（OAuth連携時のみ） -->
       <div id="analyticsSection" style="margin-bottom: 12px;"></div>
       
+      <!-- 詳細データ時系列グラフ -->
+      <div id="analyticsChartWrap" style="margin-bottom: 12px;">
+        <h3 style="margin: 12px 0 6px; font-size: 13px;">📈 詳細データ時系列</h3>
+        <div class="chart-wrap" id="analyticsChartContainer"></div>
+      </div>
+      
       <div class="chart-wrap">
         <canvas id="detailChartCanvas"></canvas>
       </div>
@@ -1024,6 +1083,17 @@
     
     // 自分のチャンネルの動画かつOAuth認証済みなら詳細データセクション表示
     renderAnalyticsSection(v);
+    // Analytics時系列グラフ（データがあれば）
+    const isMine = (v.tabKey === 'copi' || v.tabKey === 'waon');
+    const chartWrap = document.getElementById('analyticsChartWrap');
+    if (chartWrap) {
+      if (isMine && v.analyticsSnapshots && v.analyticsSnapshots.length >= 2) {
+        chartWrap.style.display = 'block';
+        renderAnalyticsTimeSeriesChart(v);
+      } else {
+        chartWrap.style.display = 'none';
+      }
+    }
     
     document.getElementById('videoDetailModal').classList.add('show');
     
@@ -1064,11 +1134,13 @@
   document.getElementById('closeVideoDetailBtn').addEventListener('click', () => {
     document.getElementById('videoDetailModal').classList.remove('show');
     if (detailChart) { detailChart.destroy(); detailChart = null; }
+    if (analyticsChart) { analyticsChart.destroy(); analyticsChart = null; }
   });
   document.getElementById('videoDetailModal').addEventListener('click', (e) => {
     if (e.target.id === 'videoDetailModal') {
       document.getElementById('videoDetailModal').classList.remove('show');
       if (detailChart) { detailChart.destroy(); detailChart = null; }
+      if (analyticsChart) { analyticsChart.destroy(); analyticsChart = null; }
     }
   });
 
@@ -1184,6 +1256,7 @@
             oauthTokenExpireAt = Date.now() + (response.expires_in * 1000) - 60000; // 念のため1分余裕
             try {
               await fetchMyChannelId();
+              saveOAuthState();
               resolve();
             } catch (err) {
               reject(err);
@@ -1206,6 +1279,7 @@
     oauthAccessToken = null;
     oauthTokenExpireAt = 0;
     oauthMyChannelId = null;
+    saveOAuthState();
     updateSettingsModal();
     alert('連携を解除しました');
   });
@@ -1258,6 +1332,50 @@
       subGained,
       subLost
     };
+  }
+
+  // Analytics時系列グラフ（維持率・CTRの推移）
+  let analyticsChart = null;
+  function renderAnalyticsTimeSeriesChart(v) {
+    const container = document.getElementById('analyticsChartContainer');
+    if (!container) return;
+    const snaps = (v.analyticsSnapshots || []).slice().sort((a, b) => new Date(a.at) - new Date(b.at));
+    if (snaps.length < 2) {
+      container.innerHTML = `
+        <div style="padding: 10px; color: var(--text-faint); font-size: 11px; text-align: center;">
+          💡 詳細データが2回以上取得されると、ここに時系列グラフが表示されます
+        </div>
+      `;
+      return;
+    }
+    container.innerHTML = '<canvas id="analyticsChartCanvas"></canvas>';
+    const ctx = document.getElementById('analyticsChartCanvas').getContext('2d');
+    if (analyticsChart) analyticsChart.destroy();
+    analyticsChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: snaps.map(s => {
+          const d = new Date(s.at);
+          return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+        }),
+        datasets: [
+          { label: '平均視聴率 (%)', data: snaps.map(s => (s.avgPercentage || 0).toFixed(1)), 
+            borderColor: '#ff6b9d', backgroundColor: '#ff6b9d', borderWidth: 3, tension: 0.3, yAxisID: 'y' },
+          { label: 'CTR (%)', data: snaps.map(s => ((s.ctr || 0) * 100).toFixed(2)), 
+            borderColor: '#4ecdc4', backgroundColor: '#4ecdc4', borderWidth: 2, tension: 0.3, yAxisID: 'y' },
+          { label: '平均視聴時間 (秒)', data: snaps.map(s => Math.round(s.avgDuration || 0)), 
+            borderColor: '#ffd93d', backgroundColor: '#ffd93d', borderWidth: 2, tension: 0.3, yAxisID: 'y1' },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'top' } },
+        scales: {
+          y: { position: 'left', title: { display: true, text: '視聴率 / CTR (%)' }, beginAtZero: true },
+          y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '視聴時間 (秒)' }, beginAtZero: true }
+        }
+      }
+    });
   }
 
   function renderAnalyticsSection(v) {
@@ -1316,11 +1434,17 @@
         `;
         return;
       }
-      // キャッシュ
-      v.analytics = { ...data, fetchedAt: new Date().toISOString() };
+      // スナップショット配列に追加（時系列蓄積）
+      if (!v.analyticsSnapshots) v.analyticsSnapshots = [];
+      const snapshot = { ...data, at: new Date().toISOString() };
+      v.analyticsSnapshots.push(snapshot);
+      // 最新のもの（互換用）
+      v.analytics = { ...snapshot, fetchedAt: snapshot.at };
       await saveFirestoreData();
       section.innerHTML = renderAnalyticsData(v.analytics, v);
       section.querySelector('[data-refetch-analytics]')?.addEventListener('click', () => fetchAndShowAnalytics(v));
+      // モーダル内のグラフも更新
+      renderAnalyticsTimeSeriesChart(v);
     } catch (err) {
       section.innerHTML = `
         <div style="padding: 10px; background: var(--danger-bg); border: 2px solid var(--danger); border-radius: 8px; font-size: 12px; color: var(--danger);">
