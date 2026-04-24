@@ -22,7 +22,8 @@
   // 許可されたメールアドレス（これら以外はログイン拒否）
   const ALLOWED_EMAILS = [
     'waon.games.waon@gmail.com',
-    'c5ykykc5@gmail.com'
+    'c5ykykc5@gmail.com',
+    'hoshino.ch111@gmail.com'
   ];
   // Firebase初期化
   const firebaseApp = firebase.initializeApp(firebaseConfig);
@@ -2103,6 +2104,45 @@
   }
   .fab-color-emoji { line-height: 1; }
 
+  /* 成長分析ツールへのリンクボタン（右下、既存テーマと調和） */
+  .fab-analyzer {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    background: var(--accent-pink);
+    color: var(--on-accent);
+    border: 3px solid var(--card-border);
+    border-radius: 50px;
+    padding: 10px 18px 10px 14px;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 800;
+    font-size: 13px;
+    text-decoration: none;
+    cursor: pointer;
+    box-shadow: 4px 4px 0 var(--shadow);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    z-index: 50;
+    transition: all 0.15s;
+  }
+  .fab-analyzer:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 var(--shadow);
+  }
+  .fab-analyzer:active {
+    transform: translate(0, 0);
+    box-shadow: 2px 2px 0 var(--shadow);
+  }
+  .fab-analyzer-emoji {
+    font-size: 18px;
+    line-height: 1;
+  }
+  @media (max-width: 600px) {
+    .fab-analyzer-label { display: none; }
+    .fab-analyzer { padding: 10px 14px; border-radius: 50%; }
+  }
+
   .fab-memo-toggle {
     position: fixed;
     top: 16px;
@@ -2261,6 +2301,12 @@
 <button class="fab-color" id="colorEditorBtn" title="配色エディタを開く">
   <span class="fab-color-emoji">🎨</span>
 </button>
+
+<!-- 成長分析ツールへのリンク -->
+<a href="analyzer.html" class="fab-analyzer" title="成長分析ツールへ">
+  <span class="fab-analyzer-emoji">📊</span>
+  <span class="fab-analyzer-label">成長分析</span>
+</a>
 
 <!-- メモサイドバー開閉フローティングボタン（メモビュー時のみ表示） -->
 <button class="fab-memo-toggle" id="fabMemoToggle" title="ページ一覧の表示/非表示">
