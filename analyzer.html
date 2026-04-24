@@ -318,20 +318,21 @@
   let currentColor = localStorage.getItem('analyzer_color') || 'pink';
   
   // OAuth認証（YouTube Analytics API用）
-  // sessionStorage に保存。タブを閉じるまで保持される
-  let oauthAccessToken = sessionStorage.getItem('analyzer_oauth_token') || null;
-  let oauthTokenExpireAt = parseInt(sessionStorage.getItem('analyzer_oauth_expire') || '0');
-  let oauthMyChannelId = sessionStorage.getItem('analyzer_oauth_channel') || null;
+  // localStorage に保存。タブを閉じても、ブラウザを再起動しても保持される
+  // ※アクセストークン自体は1時間で期限切れ、その時は自動で再認証ダイアログを出す
+  let oauthAccessToken = localStorage.getItem('analyzer_oauth_token') || null;
+  let oauthTokenExpireAt = parseInt(localStorage.getItem('analyzer_oauth_expire') || '0');
+  let oauthMyChannelId = localStorage.getItem('analyzer_oauth_channel') || null;
   
   function saveOAuthState() {
     if (oauthAccessToken) {
-      sessionStorage.setItem('analyzer_oauth_token', oauthAccessToken);
-      sessionStorage.setItem('analyzer_oauth_expire', String(oauthTokenExpireAt));
-      if (oauthMyChannelId) sessionStorage.setItem('analyzer_oauth_channel', oauthMyChannelId);
+      localStorage.setItem('analyzer_oauth_token', oauthAccessToken);
+      localStorage.setItem('analyzer_oauth_expire', String(oauthTokenExpireAt));
+      if (oauthMyChannelId) localStorage.setItem('analyzer_oauth_channel', oauthMyChannelId);
     } else {
-      sessionStorage.removeItem('analyzer_oauth_token');
-      sessionStorage.removeItem('analyzer_oauth_expire');
-      sessionStorage.removeItem('analyzer_oauth_channel');
+      localStorage.removeItem('analyzer_oauth_token');
+      localStorage.removeItem('analyzer_oauth_expire');
+      localStorage.removeItem('analyzer_oauth_channel');
     }
   }
   
@@ -1509,7 +1510,26 @@
   ].join(' ');
   
   function isOAuthAuthenticated() {
-    return oauthAccessToken && Date.now() < oauthTokenExpireAt;
+    if (!oauthAccessToken) return false;
+    // 期限切れチェック（1分余裕を持たせる）
+    if (Date.now() >= oauthTokenExpireAt) {
+      // 期限切れなので自動でクリア
+      console.log('[OAuth] アクセストークン期限切れ、自動クリアします');
+      oauthAccessToken = null;
+      oauthTokenExpireAt = 0;
+      saveOAuthState();
+      return false;
+    }
+    return true;
+  }
+  
+  // OAuth 期限切れを検知した時の親切な再連携プロンプト
+  async function promptReauth() {
+    const reconnect = confirm('⏰ YouTube連携の期限が切れました。\n再連携しますか？（ワンクリックで復活）');
+    if (!reconnect) return false;
+    // OAuth連携ボタンをクリックさせる
+    document.getElementById('oauthLoginBtn')?.click();
+    return true;
   }
   
   document.getElementById('oauthLoginBtn').addEventListener('click', async () => {
