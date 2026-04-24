@@ -42,6 +42,10 @@ const OFFSET_TARGETS = [
   { label: '1m', ms: 30 * 24 * 60 * 60 * 1000 },
 ];
 
+// 取得タイミングの許容範囲：目標時刻を過ぎてから30分以内のみ取得
+// （GitHub Actionsのcron誤差を考慮した幅）
+const TOLERANCE_MS = 30 * 60 * 1000;
+
 // 対象動画の条件：投稿から31日以内の動画のみ
 const MAX_AGE_MS = 31 * 24 * 60 * 60 * 1000;
 
@@ -180,8 +184,16 @@ async function main() {
       const alreadyHas = video.snapshots.some(s => s.targetOffset === offset.label);
       if (alreadyHas) continue;
 
-      // 目標時刻を過ぎていなければスキップ
-      if (ageMs < offset.ms) continue;
+      // 目標時刻との差を計算
+      const targetTime = publishedTime + offset.ms;
+      const delta = now - targetTime;
+
+      // 目標時刻にまだ達していない → スキップ
+      if (delta < 0) continue;
+      
+      // 目標時刻から許容範囲（30分）を超えて経過 → スキップ
+      // （過去動画の取り逃し分は取得しない、タイミング外のデータは意味がない）
+      if (delta > TOLERANCE_MS) continue;
 
       console.log(`  🎯 [${offset.label}] 取得対象: ${video.title?.slice(0, 40)}`);
 
