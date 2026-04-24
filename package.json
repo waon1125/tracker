@@ -1,0 +1,12 @@
+{
+  "name": "youtube-tracker-auto-fetch",
+  "version": "1.0.0",
+  "description": "GitHub Actions で YouTube Analytics を自動取得",
+  "private": true,
+  "scripts": {
+    "fetch": "node scripts/fetch-analytics.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0"
+  }
+}
