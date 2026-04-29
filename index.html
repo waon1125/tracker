@@ -2508,6 +2508,7 @@
               <th>日付</th>
               <th class="right">再生数</th>
               <th class="right">インプレ</th>
+              <th class="right">CTR</th>
               <th class="right">目標</th>
               <th></th>
             </tr>
@@ -4482,6 +4483,9 @@
       const imprText = (v.impressions !== undefined && v.impressions !== null)
         ? v.impressions.toLocaleString()
         : '<span style="color: var(--text-faint); font-weight: 400;">—</span>';
+      const ctrText = (v.ctr !== undefined && v.ctr !== null)
+        ? `${v.ctr}%`
+        : '<span style="color: var(--text-faint); font-weight: 400;">—</span>';
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td class="num">${index}</td>
@@ -4489,6 +4493,7 @@
         <td class="date-cell">${v.date}</td>
         <td class="views">${v.views.toLocaleString()}</td>
         <td class="views" style="color: var(--accent-teal);">${imprText}</td>
+        <td class="views" style="color: var(--accent-yellow);">${ctrText}</td>
         <td class="target-cell" style="color: ${color};">
           ${icon} ${isAbove ? '+' : ''}${pct}%
           <div style="font-size: 10px; color: #999; font-weight: 500; margin-top: 2px;">目標 ${target.toLocaleString()}</div>
