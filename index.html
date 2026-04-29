@@ -3614,8 +3614,7 @@
       
       // 6. トラッカーに保存（保存先のチャンネルキー：waon→ch2 / copi→ch1）
       const targetTrackerCh = bulkSelectedChannel === 'waon' ? 'ch2' : 'ch1';
-      const existingVideoTitles = new Set(channels[targetTrackerCh].videos.map(v => v.title));
-      const existingDates = new Set(channels[targetTrackerCh].videos.map(v => v.title + '|' + v.date));
+      const existingDates = new Set(channels[targetTrackerCh].videos.map(v => v.date));
       
       let added = 0;
       let skippedDup = 0;
@@ -3625,9 +3624,8 @@
         const date = (item.snippet?.publishedAt || '').slice(0, 10); // YYYY-MM-DD
         if (!title || !date) continue;
         
-        // 重複チェック（同じタイトル+日付なら追加しない）
-        const dupKey = title + '|' + date;
-        if (existingDates.has(dupKey)) {
+        // 重複チェック（同じ投稿日の動画がすでにあればスキップ）
+        if (existingDates.has(date)) {
           skippedDup++;
           continue;
         }
@@ -3643,7 +3641,7 @@
           // impressions / ctr は未設定（後で手入力）
           autoFetched: true, // 一括取得フラグ
         });
-        existingDates.add(dupKey);
+        existingDates.add(date);
         added++;
       }
       
