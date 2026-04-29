@@ -25,6 +25,8 @@
     'c5ykykc5@gmail.com',
     'hoshino.ch111@gmail.com'
   ];
+  // YouTube Data API v3 用のAPIキー（Firebase APIキーと同じ）
+  const YOUTUBE_API_KEY = firebaseConfig.apiKey;
   // Firebase初期化
   const firebaseApp = firebase.initializeApp(firebaseConfig);
   const firestoreDb = firebase.firestore();
@@ -2104,6 +2106,56 @@
   }
   .fab-color-emoji { line-height: 1; }
 
+  /* 動画一括取得モーダル用 */
+  .bulk-tab-row { display: flex; gap: 8px; margin-bottom: 16px; }
+  .bulk-tab {
+    flex: 1;
+    padding: 10px 12px;
+    border: 3px solid var(--card-border);
+    border-radius: 12px;
+    background: var(--card-bg);
+    color: var(--text-color);
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .bulk-tab.active {
+    background: var(--accent-pink);
+    color: var(--on-accent);
+    box-shadow: 3px 3px 0 var(--shadow);
+  }
+  .bulk-channel-row { display: flex; gap: 8px; }
+  .bulk-channel-btn {
+    flex: 1;
+    padding: 8px 10px;
+    border: 2px solid var(--card-border);
+    border-radius: 10px;
+    background: var(--card-bg);
+    color: var(--text-color);
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .bulk-channel-btn.active {
+    background: var(--accent-teal);
+    color: var(--on-accent);
+  }
+  .bulk-status {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 10px;
+    background: var(--card-bg);
+    border: 2px solid var(--card-border);
+    font-size: 13px;
+    line-height: 1.5;
+    min-height: 40px;
+  }
+  .bulk-status.loading { color: var(--accent-teal); }
+  .bulk-status.success { color: var(--accent-pink); }
+  .bulk-status.error { color: #e74c3c; }
+
   /* 成長分析ツールへのリンクボタン（右下、既存テーマと調和） */
   .fab-analyzer {
     position: fixed;
@@ -2401,6 +2453,7 @@
         <div class="chip-section">
           <button class="chip chip-series active" data-series="views" style="background: var(--accent-pink); color: var(--on-accent);">👀 再生</button>
           <button class="chip chip-series" data-series="impressions" style="background: var(--accent-teal); color: var(--on-accent);">📊 インプレ</button>
+          <button class="chip chip-series" data-series="ctr" style="background: var(--accent-yellow); color: var(--on-accent);">🎯 CTR</button>
         </div>
       </div>
     </div>
@@ -2420,6 +2473,10 @@
         <div class="legend-item">
           <span class="legend-bar" style="background: #4ecdc4;"></span>
           <span>目標ライン</span>
+        </div>
+        <div class="legend-item" id="legendCtr">
+          <span class="legend-bar" style="background: rgba(255, 217, 61, 0.55); border: 2px solid #e8b800;"></span>
+          <span>CTR</span>
         </div>
         <div class="legend-item hidden" id="legendNoPost">
           <span class="legend-bar" style="background: #d0d0d0; border: 1px solid #999; transform: rotate(45deg); width: 10px; height: 10px;"></span>
@@ -2656,25 +2713,67 @@
 <div class="modal-overlay" id="addVideoModal">
   <div class="modal">
     <div class="modal-title"><span>✏️</span><span>新しい動画を記録</span></div>
-    <div class="input-group">
-      <label class="input-label">🎬 動画タイトル</label>
-      <input type="text" id="titleInput" placeholder="タイトルを入力">
+    
+    <div class="bulk-tab-row">
+      <button class="bulk-tab active" data-bulk-tab="manual">📝 手動入力</button>
+      <button class="bulk-tab" data-bulk-tab="auto">📥 一括取得</button>
     </div>
-    <div class="input-group">
-      <label class="input-label">📅 投稿日</label>
-      <input type="date" id="dateInput">
+    
+    <!-- 手動入力タブ -->
+    <div id="bulkTabManual">
+      <div class="input-group">
+        <label class="input-label">🎬 動画タイトル</label>
+        <input type="text" id="titleInput" placeholder="タイトルを入力">
+      </div>
+      <div class="input-group">
+        <label class="input-label">📅 投稿日</label>
+        <input type="date" id="dateInput">
+      </div>
+      <div class="input-group">
+        <label class="input-label">👀 1時間の再生数</label>
+        <input type="number" id="viewsInput" placeholder="例: 3500">
+      </div>
+      <div class="input-group">
+        <label class="input-label">📊 1時間のインプレッション（省略可）</label>
+        <input type="number" id="impressionsInput" placeholder="例: 12000">
+      </div>
+      <div class="input-group">
+        <label class="input-label">🎯 クリック率 CTR（％、省略可）</label>
+        <input type="number" id="ctrInput" placeholder="例: 5.2" step="0.1" min="0" max="100">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-save" id="saveBtn">💾 保存する</button>
+        <button class="btn btn-ghost" id="cancelBtn">キャンセル</button>
+      </div>
     </div>
-    <div class="input-group">
-      <label class="input-label">👀 1時間の再生数</label>
-      <input type="number" id="viewsInput" placeholder="例: 3500">
-    </div>
-    <div class="input-group">
-      <label class="input-label">📊 1時間のインプレッション（省略可）</label>
-      <input type="number" id="impressionsInput" placeholder="例: 12000">
-    </div>
-    <div class="btn-row">
-      <button class="btn btn-save" id="saveBtn">💾 保存する</button>
-      <button class="btn btn-ghost" id="cancelBtn">キャンセル</button>
+    
+    <!-- 一括取得タブ -->
+    <div id="bulkTabAuto" class="hidden">
+      <div class="input-group">
+        <label class="input-label">📺 取得するチャンネル</label>
+        <div class="bulk-channel-row">
+          <button class="bulk-channel-btn active" id="bulkChWaon" data-channel="waon">🍁 和音GAMES</button>
+          <button class="bulk-channel-btn" id="bulkChCopi" data-channel="copi">🌙 コピプラネット</button>
+        </div>
+      </div>
+      <div class="input-group">
+        <label class="input-label">🔢 取得本数（最大50）</label>
+        <input type="number" id="bulkCountInput" value="10" min="1" max="50">
+      </div>
+      <div class="input-group">
+        <label class="input-label">
+          <input type="checkbox" id="bulkExcludeShort" checked> ショート動画を除外（180秒以下）
+        </label>
+        <label class="input-label" style="margin-top: 6px;">
+          <input type="checkbox" id="bulkExcludeLive" checked> ライブ配信を除外
+        </label>
+      </div>
+      <div class="hint">💡 タイトルと投稿日が自動取得されます。再生数・インプレ・CTRは後から手入力してください。</div>
+      <div class="bulk-status" id="bulkStatus">取得対象を選んで「取得開始」を押してください</div>
+      <div class="btn-row">
+        <button class="btn btn-save" id="bulkFetchBtn">📥 取得開始</button>
+        <button class="btn btn-ghost" id="bulkCancelBtn">キャンセル</button>
+      </div>
     </div>
   </div>
 </div>
@@ -2698,6 +2797,10 @@
     <div class="input-group">
       <label class="input-label">📊 1時間のインプレッション（省略可）</label>
       <input type="number" id="editImpressionsInput" placeholder="例: 12000">
+    </div>
+    <div class="input-group">
+      <label class="input-label">🎯 クリック率 CTR（％、省略可）</label>
+      <input type="number" id="editCtrInput" placeholder="例: 5.2" step="0.1" min="0" max="100">
     </div>
     <div class="btn-row">
       <button class="btn btn-save" id="saveEditVideoBtn">💾 更新する</button>
@@ -2775,7 +2878,7 @@
   let currentRange = 'all';
   let currentAgg = 'video';
   // 表示する系列（オン/オフ）
-  let seriesEnabled = { views: true, impressions: true };
+  let seriesEnabled = { views: true, impressions: true, ctr: true };
   let viewingPhaseIdx = null;
   let editingPhaseIdx = null;
   let editingNewPhase = false;
@@ -2846,8 +2949,9 @@
         const parsed = JSON.parse(seriesStr);
         if (typeof parsed.views === 'boolean') seriesEnabled.views = parsed.views;
         if (typeof parsed.impressions === 'boolean') seriesEnabled.impressions = parsed.impressions;
-        // 両方OFFになってる場合は強制的にviewsをON
-        if (!seriesEnabled.views && !seriesEnabled.impressions) seriesEnabled.views = true;
+        if (typeof parsed.ctr === 'boolean') seriesEnabled.ctr = parsed.ctr;
+        // 全部OFFになってる場合は強制的にviewsをON
+        if (!seriesEnabled.views && !seriesEnabled.impressions && !seriesEnabled.ctr) seriesEnabled.views = true;
       } catch (e) {}
     }
   }
@@ -3367,18 +3471,221 @@
     document.getElementById('titleInput').value = '';
     document.getElementById('viewsInput').value = '';
     document.getElementById('impressionsInput').value = '';
+    document.getElementById('ctrInput').value = '';
     const t = new Date().toISOString().split('T')[0];
     document.getElementById('dateInput').value = t;
     document.getElementById('dateInput').max = t;
   }
+
+  // ===== 動画一括取得機能 =====
+  let bulkSelectedChannel = 'waon';
+  
+  // モーダルタブ切替
+  document.querySelectorAll('.bulk-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const target = tab.dataset.bulkTab;
+      document.querySelectorAll('.bulk-tab').forEach(t => t.classList.toggle('active', t.dataset.bulkTab === target));
+      document.getElementById('bulkTabManual').classList.toggle('hidden', target !== 'manual');
+      document.getElementById('bulkTabAuto').classList.toggle('hidden', target !== 'auto');
+    });
+  });
+  
+  // チャンネル選択切替
+  document.querySelectorAll('.bulk-channel-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      bulkSelectedChannel = btn.dataset.channel;
+      document.querySelectorAll('.bulk-channel-btn').forEach(b => 
+        b.classList.toggle('active', b.dataset.channel === bulkSelectedChannel));
+    });
+  });
+  
+  // キャンセル
+  document.getElementById('bulkCancelBtn').addEventListener('click', () => {
+    addVideoModal.classList.remove('show');
+  });
+  
+  // analyzer.html のデータからチャンネルIDを取得
+  async function getChannelIdFromAnalyzerData(channelKey) {
+    try {
+      const docRef = firestoreDb.collection('analyzer').doc('analyzer-data');
+      const snap = await docRef.get();
+      if (!snap.exists) return null;
+      const data = snap.data();
+      const ch = data.channels?.[channelKey];
+      return ch?.info?.id || null;
+    } catch (err) {
+      console.error('[Bulk] analyzer-data 取得エラー:', err);
+      return null;
+    }
+  }
+  
+  // ISO 8601 duration → 秒数
+  function parseISODuration(iso) {
+    if (!iso) return 0;
+    const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if (!m) return 0;
+    return (parseInt(m[1] || 0)) * 3600 + (parseInt(m[2] || 0)) * 60 + (parseInt(m[3] || 0));
+  }
+  
+  // 取得開始
+  document.getElementById('bulkFetchBtn').addEventListener('click', async () => {
+    const statusEl = document.getElementById('bulkStatus');
+    const fetchBtn = document.getElementById('bulkFetchBtn');
+    const count = parseInt(document.getElementById('bulkCountInput').value) || 10;
+    const excludeShort = document.getElementById('bulkExcludeShort').checked;
+    const excludeLive = document.getElementById('bulkExcludeLive').checked;
+    
+    if (count < 1 || count > 50) {
+      statusEl.textContent = '⚠️ 取得本数は1〜50の範囲で指定してください';
+      statusEl.className = 'bulk-status error';
+      return;
+    }
+    
+    fetchBtn.disabled = true;
+    
+    try {
+      // 1. チャンネルID取得
+      statusEl.textContent = '🔍 チャンネル情報を取得中...';
+      statusEl.className = 'bulk-status loading';
+      const channelId = await getChannelIdFromAnalyzerData(bulkSelectedChannel);
+      if (!channelId) {
+        throw new Error(`チャンネルIDが取得できませんでした。先にアナライザーで「${bulkSelectedChannel === 'waon' ? '和音GAMES' : 'コピプラネット'}」を登録してください`);
+      }
+      
+      // 2. uploads playlist から動画ID取得（取得本数 + 除外余裕で1.5倍取得）
+      statusEl.textContent = '📥 動画リストを取得中...';
+      const fetchCount = Math.min(50, Math.ceil(count * 2)); // 多めに取って除外後に切り詰める
+      const uploadsPlaylistId = 'UU' + channelId.slice(2);
+      const playlistUrl = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
+      playlistUrl.searchParams.set('part', 'contentDetails');
+      playlistUrl.searchParams.set('playlistId', uploadsPlaylistId);
+      playlistUrl.searchParams.set('maxResults', String(fetchCount));
+      playlistUrl.searchParams.set('key', YOUTUBE_API_KEY);
+      
+      const playlistRes = await fetch(playlistUrl);
+      if (!playlistRes.ok) {
+        const errText = await playlistRes.text();
+        throw new Error(`動画リスト取得失敗: ${playlistRes.status}`);
+      }
+      const playlistData = await playlistRes.json();
+      const videoIds = (playlistData.items || []).map(it => it.contentDetails?.videoId).filter(Boolean);
+      
+      if (videoIds.length === 0) {
+        statusEl.textContent = '⚠️ 動画が見つかりませんでした';
+        statusEl.className = 'bulk-status error';
+        fetchBtn.disabled = false;
+        return;
+      }
+      
+      // 3. 動画詳細取得
+      statusEl.textContent = `📊 ${videoIds.length}本の動画詳細を取得中...`;
+      const videosUrl = new URL('https://www.googleapis.com/youtube/v3/videos');
+      videosUrl.searchParams.set('part', 'snippet,contentDetails,liveStreamingDetails');
+      videosUrl.searchParams.set('id', videoIds.join(','));
+      videosUrl.searchParams.set('key', YOUTUBE_API_KEY);
+      
+      const videosRes = await fetch(videosUrl);
+      if (!videosRes.ok) throw new Error(`動画詳細取得失敗: ${videosRes.status}`);
+      const videosData = await videosRes.json();
+      
+      // 4. ショート/ライブ除外フィルタ
+      const filtered = (videosData.items || []).filter(item => {
+        if (excludeLive) {
+          if (item.snippet?.liveBroadcastContent && item.snippet.liveBroadcastContent !== 'none') return false;
+          if (item.liveStreamingDetails?.actualEndTime) return false; // ライブアーカイブ
+        }
+        if (excludeShort) {
+          const sec = parseISODuration(item.contentDetails?.duration);
+          if (sec > 0 && sec <= 180) return false;
+        }
+        return true;
+      });
+      
+      // 5. 取得本数で切り詰め
+      const targets = filtered.slice(0, count);
+      
+      if (targets.length === 0) {
+        statusEl.textContent = '⚠️ 条件に該当する動画がありませんでした';
+        statusEl.className = 'bulk-status error';
+        fetchBtn.disabled = false;
+        return;
+      }
+      
+      // 6. トラッカーに保存（保存先のチャンネルキー：waon→ch2 / copi→ch1）
+      const targetTrackerCh = bulkSelectedChannel === 'waon' ? 'ch2' : 'ch1';
+      const existingVideoTitles = new Set(channels[targetTrackerCh].videos.map(v => v.title));
+      const existingDates = new Set(channels[targetTrackerCh].videos.map(v => v.title + '|' + v.date));
+      
+      let added = 0;
+      let skippedDup = 0;
+      
+      for (const item of targets) {
+        const title = item.snippet?.title || '';
+        const date = (item.snippet?.publishedAt || '').slice(0, 10); // YYYY-MM-DD
+        if (!title || !date) continue;
+        
+        // 重複チェック（同じタイトル+日付なら追加しない）
+        const dupKey = title + '|' + date;
+        if (existingDates.has(dupKey)) {
+          skippedDup++;
+          continue;
+        }
+        
+        const newVideoId = 'v_bulk_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+        // 数値はnullで初期化（後で手入力前提）
+        // ただしvideosモデル上、viewsは必須っぽいので0で入れておく
+        channels[targetTrackerCh].videos.push({
+          id: newVideoId,
+          title,
+          date,
+          views: 0, // 後で手入力
+          // impressions / ctr は未設定（後で手入力）
+          autoFetched: true, // 一括取得フラグ
+        });
+        existingDates.add(dupKey);
+        added++;
+      }
+      
+      // 7. ソート＋保存
+      channels[targetTrackerCh].videos.sort((a, b) => new Date(a.date) - new Date(b.date));
+      ensurePhaseStartDate();
+      saveCache();
+      renderAll();
+      await saveToFirestore();
+      
+      // 8. ステータス表示
+      let msg = `✅ ${added}本を追加しました`;
+      if (skippedDup > 0) msg += `（重複${skippedDup}本はスキップ）`;
+      msg += '。再生数・インプレ・CTRは編集ボタンから手入力してください。';
+      statusEl.textContent = msg;
+      statusEl.className = 'bulk-status success';
+      fetchBtn.disabled = false;
+      
+      // 数秒後にモーダルを閉じる
+      setTimeout(() => {
+        addVideoModal.classList.remove('show');
+        statusEl.textContent = '取得対象を選んで「取得開始」を押してください';
+        statusEl.className = 'bulk-status';
+      }, 3000);
+      
+    } catch (err) {
+      console.error('[Bulk] エラー:', err);
+      statusEl.textContent = '❌ ' + err.message;
+      statusEl.className = 'bulk-status error';
+      fetchBtn.disabled = false;
+    }
+  });
   document.getElementById('saveBtn').addEventListener('click', async () => {
     const title = document.getElementById('titleInput').value.trim();
     const date = document.getElementById('dateInput').value;
     const views = parseInt(document.getElementById('viewsInput').value);
     const impressionsRaw = document.getElementById('impressionsInput').value.trim();
     const impressions = impressionsRaw === '' ? null : parseInt(impressionsRaw);
+    const ctrRaw = document.getElementById('ctrInput').value.trim();
+    const ctr = ctrRaw === '' ? null : parseFloat(ctrRaw);
     if (!title || !date || !views || isNaN(views)) { alert('タイトル、投稿日、再生数を正しく入力してね！'); return; }
     if (impressionsRaw !== '' && isNaN(impressions)) { alert('インプレッション数が不正です'); return; }
+    if (ctrRaw !== '' && (isNaN(ctr) || ctr < 0 || ctr > 100)) { alert('CTRは0〜100の数値で入力してね！'); return; }
     const todayStr = new Date().toISOString().split('T')[0];
     if (date > todayStr) {
       alert('未来の日付は記録できません。今日以前の日付を選んでください！');
@@ -3388,6 +3695,9 @@
     const videoObj = { id: newVideoId, title, date, views };
     if (impressions !== null && !isNaN(impressions)) {
       videoObj.impressions = impressions;
+    }
+    if (ctr !== null && !isNaN(ctr)) {
+      videoObj.ctr = ctr;
     }
     channels[currentChannel].videos.push(videoObj);
     channels[currentChannel].videos.sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -3429,6 +3739,8 @@
     document.getElementById('editViewsInput').value = video.views;
     document.getElementById('editImpressionsInput').value = 
       (video.impressions !== undefined && video.impressions !== null) ? video.impressions : '';
+    document.getElementById('editCtrInput').value = 
+      (video.ctr !== undefined && video.ctr !== null) ? video.ctr : '';
     document.getElementById('editVideoModal').classList.add('show');
     setTimeout(() => document.getElementById('editTitleInput').focus(), 100);
   }
@@ -3447,12 +3759,18 @@
     const views = parseInt(document.getElementById('editViewsInput').value);
     const impressionsRaw = document.getElementById('editImpressionsInput').value.trim();
     const impressions = impressionsRaw === '' ? null : parseInt(impressionsRaw);
-    if (!title || !date || !views || isNaN(views)) { 
-      alert('タイトル、投稿日、再生数を正しく入力してね！'); 
+    const ctrRaw = document.getElementById('editCtrInput').value.trim();
+    const ctr = ctrRaw === '' ? null : parseFloat(ctrRaw);
+    if (!title || !date || isNaN(views) || views < 0) { 
+      alert('タイトル、投稿日、再生数を正しく入力してね！（再生数は0以上の数値）'); 
       return; 
     }
     if (impressionsRaw !== '' && isNaN(impressions)) { 
       alert('インプレッション数が不正です'); 
+      return; 
+    }
+    if (ctrRaw !== '' && (isNaN(ctr) || ctr < 0 || ctr > 100)) { 
+      alert('CTRは0〜100の数値で入力してね！'); 
       return; 
     }
     const todayStr = new Date().toISOString().split('T')[0];
@@ -3474,6 +3792,11 @@
       video.impressions = impressions;
     } else {
       delete video.impressions;
+    }
+    if (ctr !== null && !isNaN(ctr)) {
+      video.ctr = ctr;
+    } else {
+      delete video.ctr;
     }
     // 日付でソートし直し
     channels[currentChannel].videos.sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -3558,6 +3881,7 @@
             label,
             value: null,
             impressions: null,
+            ctr: null,
             target: calcTargetForVideo(slotDateStr),
             tooltip: `${label}（投稿なし）`,
             date: slotDateStr,
@@ -3570,6 +3894,7 @@
             label,
             value: v.views,
             impressions: (v.impressions !== undefined && v.impressions !== null) ? v.impressions : null,
+            ctr: (v.ctr !== undefined && v.ctr !== null) ? v.ctr : null,
             target: calcTargetForVideo(v.date),
             tooltip: `#${fullIdx} ${v.title} (${v.date})`,
             date: v.date
@@ -3581,10 +3906,16 @@
           const imprAvg = imprVideos.length > 0
             ? Math.round(imprVideos.reduce((s, v) => s + v.impressions, 0) / imprVideos.length)
             : null;
+          // CTRも値のあるものだけで平均（小数1桁まで）
+          const ctrVideos = videosOnThisDay.filter(v => v.ctr !== undefined && v.ctr !== null);
+          const ctrAvg = ctrVideos.length > 0
+            ? Math.round(ctrVideos.reduce((s, v) => s + v.ctr, 0) / ctrVideos.length * 10) / 10
+            : null;
           result.push({
             label,
             value: avg,
             impressions: imprAvg,
+            ctr: ctrAvg,
             target: calcTargetForVideo(slotDateStr),
             tooltip: `${label}（${videosOnThisDay.length}本の平均）`,
             date: slotDateStr
@@ -3602,6 +3933,7 @@
         return {
           label: `#${fullIdx}`, value: v.views,
           impressions: (v.impressions !== undefined && v.impressions !== null) ? v.impressions : null,
+          ctr: (v.ctr !== undefined && v.ctr !== null) ? v.ctr : null,
           target: calcTargetForVideo(v.date),
           tooltip: `${v.title} (${v.date})`, date: v.date
         };
@@ -3614,10 +3946,11 @@
       if (currentAgg === 'day') { bucketDate = startOfDay(d); key = bucketDate.getTime(); label = formatDate(bucketDate); }
       else if (currentAgg === 'week') { bucketDate = startOfWeek(d); key = bucketDate.getTime(); label = formatWeek(bucketDate); }
       else { bucketDate = startOfMonth(d); key = bucketDate.getTime(); label = formatMonth(bucketDate); }
-      if (!buckets.has(key)) buckets.set(key, { label, views: [], impressions: [], bucketDate, count: 0 });
+      if (!buckets.has(key)) buckets.set(key, { label, views: [], impressions: [], ctrs: [], bucketDate, count: 0 });
       const b = buckets.get(key);
       b.views.push(v.views);
       if (v.impressions !== undefined && v.impressions !== null) b.impressions.push(v.impressions);
+      if (v.ctr !== undefined && v.ctr !== null) b.ctrs.push(v.ctr);
       b.count++;
     });
     const keys = [...buckets.keys()].sort((a, b) => a - b);
@@ -3627,10 +3960,14 @@
       const imprAvg = b.impressions.length > 0
         ? Math.round(b.impressions.reduce((s, x) => s + x, 0) / b.impressions.length)
         : null;
+      const ctrAvg = b.ctrs.length > 0
+        ? Math.round(b.ctrs.reduce((s, x) => s + x, 0) / b.ctrs.length * 10) / 10
+        : null;
       const targetDate = b.bucketDate.toISOString().split('T')[0];
       return {
         label: b.label, value: avg,
         impressions: imprAvg,
+        ctr: ctrAvg,
         target: calcTargetForVideo(targetDate),
         tooltip: `${b.label}（${b.count}本の平均）`,
         date: targetDate
@@ -3743,6 +4080,7 @@
     const labels = data.map(d => d.label);
     let viewsData = data.map(d => d.value);
     const impressionsData = data.map(d => (d.impressions !== undefined ? d.impressions : null));
+    const ctrData = data.map(d => (d.ctr !== undefined && d.ctr !== null) ? d.ctr : null);
     const targetData = data.map(d => d.target);
     const tooltips = data.map(d => d.tooltip);
     if (chart) chart.destroy();
@@ -3907,6 +4245,24 @@
       });
     }
     
+    // CTR棒グラフ（データがあり、かつONなら表示）
+    const hasCtr = ctrData.some(v => v !== null && v !== undefined);
+    if (seriesEnabled.ctr && hasCtr) {
+      datasets.push({
+        type: 'bar',
+        label: (aggLabel[currentAgg] || '実績') + '（CTR%）',
+        data: ctrData,
+        backgroundColor: 'rgba(255, 217, 61, 0.55)',
+        borderColor: '#e8b800',
+        borderWidth: 2,
+        borderRadius: 4,
+        barPercentage: 0.55,
+        categoryPercentage: 0.85,
+        yAxisID: 'yCtr',
+        order: 99 // 棒グラフは線の後ろに描画
+      });
+    }
+    
     // 「投稿なし日」マーカー（再生数ON時のみ）
     if (isDailySlotMode && seriesEnabled.views) {
       datasets.push({
@@ -3957,6 +4313,10 @@
               if (label.includes('（インプレ）')) {
                 return impressionsData[item.dataIndex] !== null && impressionsData[item.dataIndex] !== undefined;
               }
+              // CTRも未入力ならツールチップ非表示
+              if (label.includes('（CTR%）')) {
+                return ctrData[item.dataIndex] !== null && ctrData[item.dataIndex] !== undefined;
+              }
               return true;
             },
             callbacks: {
@@ -3967,7 +4327,11 @@
                   return ' 投稿なし';
                 }
                 if (item.parsed.y === null) return null;
-                // インプレは「回」ではなく「回」表記のままでOKだが「impression」として表示
+                // CTRはパーセント表記
+                if (label.includes('（CTR%）')) {
+                  return ` ${label}: ${item.parsed.y.toFixed(1)}%`;
+                }
+                // インプレは「回」ではなく「impression」として表示
                 if (label.includes('（インプレ）')) {
                   return ` ${label}: ${item.parsed.y.toLocaleString()}`;
                 }
@@ -4064,7 +4428,27 @@
                 }
               }
             };
-          })() : {})
+          })() : {}),
+          // CTR用Y軸（CTRがONかつデータあり時のみ）
+          ...(seriesEnabled.ctr && hasCtr ? {
+            yCtr: {
+              position: 'right',
+              beginAtZero: true,
+              max: (() => {
+                const vals = ctrData.filter(v => v !== null && v !== undefined);
+                if (vals.length === 0) return 20;
+                const m = Math.max(...vals);
+                // CTRは普通0〜20%程度なので、最大値の1.5倍くらいまで余白持たせる
+                return Math.ceil(m * 1.5);
+              })(),
+              grid: { drawOnChartArea: false },
+              ticks: {
+                font: { family: "'M PLUS Rounded 1c', sans-serif", size: 11, weight: '700' },
+                color: '#e8b800',
+                callback: (v) => v + '%'
+              }
+            }
+          } : {})
         }
       }
     });
