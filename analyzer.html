@@ -910,7 +910,25 @@
         <div class="section">
           <h3 class="section-title">⏱️ 動画尺別の平均再生数</h3>
           <p class="hint" style="margin-bottom: 8px;">💡 各動画の最新スナップショットの再生数をもとに集計（通常動画のみ／ショート・ライブ除外）</p>
-          ${renderDurationStatsHtml(vids)}
+          <div class="duration-period-controls" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; align-items: center;">
+            <span style="font-size: 11px; color: var(--text-muted); margin-right: 4px;">📅期間:</span>
+            <button class="btn btn-sm duration-period-btn active" data-duration-period="all" data-duration-tab="${tabKey}">全期間</button>
+            <button class="btn btn-sm duration-period-btn" data-duration-period="1y" data-duration-tab="${tabKey}">1年</button>
+            <button class="btn btn-sm duration-period-btn" data-duration-period="6m" data-duration-tab="${tabKey}">6ヶ月</button>
+            <button class="btn btn-sm duration-period-btn" data-duration-period="3m" data-duration-tab="${tabKey}">3ヶ月</button>
+            <button class="btn btn-sm duration-period-btn" data-duration-period="1m" data-duration-tab="${tabKey}">1ヶ月</button>
+          </div>
+          <div class="duration-period-controls" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; align-items: center;">
+            <span style="font-size: 11px; color: var(--text-muted); margin-right: 4px;">📆カスタム:</span>
+            <input type="date" class="input-field duration-date-from" data-duration-tab="${tabKey}" style="width: auto; padding: 4px 6px; font-size: 12px;">
+            <span style="font-size: 11px; color: var(--text-muted);">〜</span>
+            <input type="date" class="input-field duration-date-to" data-duration-tab="${tabKey}" style="width: auto; padding: 4px 6px; font-size: 12px;">
+            <button class="btn btn-sm duration-date-apply" data-duration-tab="${tabKey}">適用</button>
+            <button class="btn btn-sm btn-ghost duration-date-clear" data-duration-tab="${tabKey}">クリア</button>
+          </div>
+          <div class="duration-stats-container" data-duration-tab="${tabKey}">
+            ${renderDurationStatsHtml(vids, { range: resolveDurationPeriod(durationPeriodState[tabKey]) })}
+          </div>
         </div>
         <div class="section">
           <h3 class="section-title">🎬 追跡中の動画 (${vids.length}本)</h3>
@@ -1016,6 +1034,7 @@
         });
       }
       attachVideoListHandlers(container);
+      attachDurationStatsControls(tabKey);
     } else {
       container.innerHTML = `
         <div class="section">
@@ -1246,10 +1265,50 @@
     attachVideoListHandlers(container);
   }
 
+  // タブごとの期間状態（プリセット or カスタム）
+  // { period: 'all'|'1y'|'6m'|'3m'|'1m'|'custom', from: 'YYYY-MM-DD'|null, to: 'YYYY-MM-DD'|null }
+  const durationPeriodState = {
+    copi: { period: 'all', from: null, to: null },
+    waon: { period: 'all', from: null, to: null }
+  };
+  
+  // 期間状態 → 集計用の絶対日付範囲（{fromMs, toMs} or null）
+  function resolveDurationPeriod(state) {
+    const now = Date.now();
+    if (state.period === 'all') return null;
+    if (state.period === 'custom') {
+      const fromMs = state.from ? new Date(state.from + 'T00:00:00').getTime() : null;
+      const toMs = state.to ? new Date(state.to + 'T23:59:59').getTime() : null;
+      if (fromMs === null && toMs === null) return null;
+      return { fromMs, toMs };
+    }
+    let days = 0;
+    if (state.period === '1m') days = 30;
+    else if (state.period === '3m') days = 90;
+    else if (state.period === '6m') days = 180;
+    else if (state.period === '1y') days = 365;
+    else return null;
+    return { fromMs: now - days * 86400000, toMs: null };
+  }
+
   // ==== 尺別の平均再生数集計 ====
-  function renderDurationStatsHtml(list) {
+  function renderDurationStatsHtml(list, opts = {}) {
     // 通常動画のみ（ショート・ライブ・ライブアーカイブ除外）
-    const normalVids = list.filter(v => (v.videoKind || 'normal') === 'normal');
+    let normalVids = list.filter(v => (v.videoKind || 'normal') === 'normal');
+    
+    // 期間フィルター
+    const range = opts.range || null; // {fromMs, toMs}
+    let filteredOutByPeriod = 0;
+    if (range) {
+      const before = normalVids.length;
+      normalVids = normalVids.filter(v => {
+        const t = new Date(v.publishedAt).getTime();
+        if (range.fromMs !== null && t < range.fromMs) return false;
+        if (range.toMs !== null && t > range.toMs) return false;
+        return true;
+      });
+      filteredOutByPeriod = before - normalVids.length;
+    }
     
     // 各バケットに動画を振り分けて集計
     const bucketStats = DURATION_BUCKETS.map(b => ({
@@ -1291,8 +1350,11 @@
     const totalCounted = bucketStats.reduce((sum, b) => sum + b.videos.length, 0);
     
     if (totalCounted === 0) {
+      const emptyMsg = range
+        ? '指定した期間内に該当する動画がありません'
+        : '10分以上の通常動画がまだありません';
       return `<div class="empty-state" style="padding: 20px;">
-        <div class="empty-text">10分以上の通常動画がまだありません</div>
+        <div class="empty-text">${emptyMsg}</div>
       </div>`;
     }
     
@@ -1319,14 +1381,104 @@
       `;
     }).join('');
     
-    const noteText = outOfRangeCount > 0
-      ? `<div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">💡 集計対象 ${totalCounted}本（10分未満の動画${outOfRangeCount}本は除外）</div>`
-      : `<div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">💡 集計対象 ${totalCounted}本</div>`;
+    const notes = [];
+    notes.push(`集計対象 ${totalCounted}本`);
+    if (outOfRangeCount > 0) notes.push(`10分未満${outOfRangeCount}本は除外`);
+    if (filteredOutByPeriod > 0) notes.push(`期間外${filteredOutByPeriod}本は除外`);
+    const noteText = `<div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">💡 ${notes.join('／')}</div>`;
     
     return `<div style="background: var(--card-bg); border: 2px solid var(--card-border); border-radius: 10px; padding: 12px;">
       ${rows}
       ${noteText}
     </div>`;
+  }
+  
+  // 尺別グラフを再描画（期間状態に応じて）
+  function rerenderDurationStats(tabKey) {
+    const container = document.querySelector(`.duration-stats-container[data-duration-tab="${tabKey}"]`);
+    if (!container) return;
+    const state = durationPeriodState[tabKey];
+    const range = resolveDurationPeriod(state);
+    const vids = videos.filter(v => v.tabKey === tabKey);
+    container.innerHTML = renderDurationStatsHtml(vids, { range });
+  }
+  
+  // 尺別グラフのコントロールを接続（fixed tab描画後に呼ぶ）
+  function attachDurationStatsControls(tabKey) {
+    const state = durationPeriodState[tabKey];
+    
+    // プリセットボタン
+    document.querySelectorAll(`.duration-period-btn[data-duration-tab="${tabKey}"]`).forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.durationPeriod === state.period);
+      btn.addEventListener('click', () => {
+        state.period = btn.dataset.durationPeriod;
+        state.from = null;
+        state.to = null;
+        // 全プリセットボタンのactive更新
+        document.querySelectorAll(`.duration-period-btn[data-duration-tab="${tabKey}"]`).forEach(b => {
+          b.classList.toggle('active', b.dataset.durationPeriod === state.period);
+        });
+        // カスタム入力欄もクリア
+        const fromInput = document.querySelector(`.duration-date-from[data-duration-tab="${tabKey}"]`);
+        const toInput = document.querySelector(`.duration-date-to[data-duration-tab="${tabKey}"]`);
+        if (fromInput) fromInput.value = '';
+        if (toInput) toInput.value = '';
+        rerenderDurationStats(tabKey);
+      });
+    });
+    
+    // カスタム期間：適用ボタン
+    const applyBtn = document.querySelector(`.duration-date-apply[data-duration-tab="${tabKey}"]`);
+    if (applyBtn) {
+      applyBtn.addEventListener('click', () => {
+        const fromInput = document.querySelector(`.duration-date-from[data-duration-tab="${tabKey}"]`);
+        const toInput = document.querySelector(`.duration-date-to[data-duration-tab="${tabKey}"]`);
+        const fromVal = fromInput?.value || '';
+        const toVal = toInput?.value || '';
+        if (!fromVal && !toVal) {
+          alert('開始日または終了日のいずれかを指定してください');
+          return;
+        }
+        if (fromVal && toVal && fromVal > toVal) {
+          alert('開始日が終了日より後になっています');
+          return;
+        }
+        state.period = 'custom';
+        state.from = fromVal || null;
+        state.to = toVal || null;
+        // プリセットボタンのactiveを全部外す
+        document.querySelectorAll(`.duration-period-btn[data-duration-tab="${tabKey}"]`).forEach(b => {
+          b.classList.remove('active');
+        });
+        rerenderDurationStats(tabKey);
+      });
+    }
+    
+    // カスタム期間：クリアボタン
+    const clearBtn = document.querySelector(`.duration-date-clear[data-duration-tab="${tabKey}"]`);
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        const fromInput = document.querySelector(`.duration-date-from[data-duration-tab="${tabKey}"]`);
+        const toInput = document.querySelector(`.duration-date-to[data-duration-tab="${tabKey}"]`);
+        if (fromInput) fromInput.value = '';
+        if (toInput) toInput.value = '';
+        state.period = 'all';
+        state.from = null;
+        state.to = null;
+        document.querySelectorAll(`.duration-period-btn[data-duration-tab="${tabKey}"]`).forEach(b => {
+          b.classList.toggle('active', b.dataset.durationPeriod === 'all');
+        });
+        rerenderDurationStats(tabKey);
+      });
+    }
+    
+    // カスタム入力欄に既存の状態を反映
+    if (state.period === 'custom') {
+      const fromInput = document.querySelector(`.duration-date-from[data-duration-tab="${tabKey}"]`);
+      const toInput = document.querySelector(`.duration-date-to[data-duration-tab="${tabKey}"]`);
+      if (fromInput && state.from) fromInput.value = state.from;
+      if (toInput && state.to) toInput.value = state.to;
+    }
   }
   
   function renderVideoListHtml(list) {
@@ -1336,18 +1488,17 @@
         ? v.snapshots[v.snapshots.length - 1] 
         : { views: 0, likes: 0, comments: 0 };
       const published = new Date(v.publishedAt);
-      const hoursSince = (Date.now() - published.getTime()) / 3600000;
-      let timeAgo;
-      if (hoursSince < 1) timeAgo = Math.round(hoursSince * 60) + '分前';
-      else if (hoursSince < 24) timeAgo = Math.round(hoursSince) + '時間前';
-      else if (hoursSince < 24 * 7) timeAgo = Math.round(hoursSince / 24) + '日前';
-      else timeAgo = Math.round(hoursSince / 24 / 7) + '週間前';
+      // 投稿日を「2026-04-09」形式で表示
+      const y = published.getFullYear();
+      const m = String(published.getMonth() + 1).padStart(2, '0');
+      const d = String(published.getDate()).padStart(2, '0');
+      const dateStr = `${y}-${m}-${d}`;
       return `
         <div class="video-card">
           <img src="${escapeHtml(v.thumbnailUrl)}" alt="" class="video-thumb">
           <div class="video-info">
             <div class="video-title" title="${escapeHtml(v.title)}">${escapeHtml(v.title)}</div>
-            <div class="video-meta">📺 ${escapeHtml(v.channelTitle)} · ${timeAgo} · 追跡: ${v.snapshots?.length || 0}回</div>
+            <div class="video-meta">📺 ${escapeHtml(v.channelTitle)} · 📅 ${dateStr} · 追跡: ${v.snapshots?.length || 0}回</div>
             <div class="video-stats">
               <div class="video-stat">👀 ${lastSnap.views.toLocaleString()}</div>
               <div class="video-stat">👍 ${lastSnap.likes.toLocaleString()}</div>
