@@ -528,6 +528,7 @@
       hideLogin();
       await loadFirestoreData();
       startRealtimeListener();
+      startTrackerListener();
       switchTab(currentTab);
     } else {
       currentUser = null;
@@ -538,6 +539,11 @@
   // ==== Firestore ====
   const DOC_ID = 'analyzer-data';
   const COLLECTION = 'analyzer';
+  // トラッカー（index.html）のデータ参照用
+  const TRACKER_DOC_ID = 'shared-tracker-data';
+  const TRACKER_COLLECTION = 'trackers';
+  let trackerData = null; // { ch1: {videos: [...]}, ch2: {videos: [...]} }
+  let trackerUnsubscribe = null;
   let firestoreUnsubscribe = null;
   let firestoreLastSaved = null;
 
@@ -634,6 +640,68 @@
         firestoreLastSaved = json;
         renderAll();
       }, (err) => console.error('[Firestore] リスナーエラー:', err));
+  }
+
+  // ==== トラッカー（index.html）のデータ連携 ====
+  // 1時間後の手入力データを取得するためにトラッカーDBを購読
+  function startTrackerListener() {
+    if (trackerUnsubscribe) trackerUnsubscribe();
+    trackerUnsubscribe = firestoreDb.collection(TRACKER_COLLECTION).doc(TRACKER_DOC_ID)
+      .onSnapshot((snap) => {
+        if (!snap.exists) {
+          trackerData = null;
+          return;
+        }
+        const data = snap.data();
+        trackerData = data.channels || null;
+        // 既に動画が読み込まれていれば再描画して反映
+        if (typeof renderAll === 'function' && videos && videos.length > 0) {
+          try { renderAll(); } catch (e) { /* 初期化前は無視 */ }
+        }
+      }, (err) => console.warn('[Tracker] リスナーエラー（権限不足の可能性）:', err.message));
+  }
+  
+  // tabKey ('copi'|'waon') → トラッカーのチャンネルキー ('ch1'|'ch2')
+  // 引き継ぎドキュメント記載：ch1=コピプラネット、ch2=和音GAMES
+  function tabKeyToTrackerCh(tabKey) {
+    if (tabKey === 'copi') return 'ch1';
+    if (tabKey === 'waon') return 'ch2';
+    return null;
+  }
+  
+  // analyzer の動画 → トラッカーの動画レコードを照合
+  // タイトル+投稿日（YYYY-MM-DD）でマッチング
+  function findTrackerVideo(analyzerVideo) {
+    if (!trackerData || !analyzerVideo) return null;
+    const ch = tabKeyToTrackerCh(analyzerVideo.tabKey);
+    if (!ch || !trackerData[ch] || !trackerData[ch].videos) return null;
+    const targetDate = (analyzerVideo.publishedAt || '').slice(0, 10); // YYYY-MM-DD
+    const targetTitle = (analyzerVideo.title || '').trim();
+    if (!targetDate || !targetTitle) return null;
+    return trackerData[ch].videos.find(tv => 
+      (tv.date === targetDate) && ((tv.title || '').trim() === targetTitle)
+    ) || null;
+  }
+  
+  // analyzer の動画について、1h時点（トラッカー側）の擬似スナップショットを返す
+  // 形式：{ at, views, likes:0, comments:0, targetOffset: '1h', _fromTracker: true } or null
+  function getTrackerSnapshot1h(analyzerVideo) {
+    const tv = findTrackerVideo(analyzerVideo);
+    if (!tv) return null;
+    if (tv.views === undefined || tv.views === null || tv.views <= 0) return null; // 未入力扱い
+    // 投稿時刻+1時間を擬似的な記録時刻とする（あくまで表示用）
+    const pubTime = new Date(analyzerVideo.publishedAt).getTime();
+    const at = new Date(pubTime + 60 * 60 * 1000).toISOString();
+    return {
+      at,
+      views: tv.views,
+      likes: 0,
+      comments: 0,
+      targetOffset: '1h',
+      _fromTracker: true,
+      _trackerImpressions: tv.impressions,
+      _trackerCtr: tv.ctr
+    };
   }
 
   // ==== YouTube API ====
@@ -1732,20 +1800,39 @@
           </tr>
         </thead>
         <tbody>
-          ${snaps.slice().reverse().map((s, idx) => {
-            const at = new Date(s.at);
-            const origIdx = snaps.length - 1 - idx;
-            return `
-              <tr>
-                <td>${at.toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
-                <td>${formatElapsed(at - published)}</td>
-                <td class="right">${s.views.toLocaleString()}</td>
-                <td class="right">${s.likes.toLocaleString()}</td>
-                <td class="right">${s.comments.toLocaleString()}</td>
-                <td><button class="btn btn-sm btn-ghost" data-del-snapshot="${v.id}" data-snap-idx="${origIdx}" style="color: var(--danger); padding: 2px 6px;" title="このスナップショットを削除">🗑️</button></td>
+          ${(() => {
+            // トラッカー由来の1h擬似スナップショット
+            const trackerSnap = getTrackerSnapshot1h(v);
+            const trackerRow = trackerSnap ? `
+              <tr style="background: var(--dim-bg);" title="トラッカー（初動再生数記録）から自動連携">
+                <td style="font-style: italic; color: var(--text-muted);">📋 トラッカー</td>
+                <td><span style="background: var(--accent-pink); color: var(--on-accent); padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 800;">1h</span></td>
+                <td class="right" style="font-weight: 800;">${trackerSnap.views.toLocaleString()}</td>
+                <td class="right" style="color: var(--text-faint);">—</td>
+                <td class="right" style="color: var(--text-faint);">—</td>
+                <td></td>
               </tr>
-            `;
-          }).join('')}
+            ` : '';
+            // 通常のスナップショット行
+            const normalRows = snaps.slice().reverse().map((s, idx) => {
+              const at = new Date(s.at);
+              const origIdx = snaps.length - 1 - idx;
+              const offsetBadge = s.targetOffset
+                ? `<span style="background: var(--accent-teal); color: var(--on-accent); padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 800; margin-right: 4px;">${s.targetOffset}</span>`
+                : '';
+              return `
+                <tr>
+                  <td>${at.toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
+                  <td>${offsetBadge}${formatElapsed(at - published)}</td>
+                  <td class="right">${s.views.toLocaleString()}</td>
+                  <td class="right">${s.likes.toLocaleString()}</td>
+                  <td class="right">${s.comments.toLocaleString()}</td>
+                  <td><button class="btn btn-sm btn-ghost" data-del-snapshot="${v.id}" data-snap-idx="${origIdx}" style="color: var(--danger); padding: 2px 6px;" title="このスナップショットを削除">🗑️</button></td>
+                </tr>
+              `;
+            }).join('');
+            return trackerRow + normalRows;
+          })()}
         </tbody>
       </table>
     `;
@@ -2431,11 +2518,19 @@
   
   // 動画からスナップショット値を取得（X軸モードに応じて）
   // offset: 'latest' | '1h' | '1d' | '1w' | '1m'
+  // 1h時点の値はトラッカー（index.html）の手入力データから取得する
   function getSnapshotValue(video, offset) {
-    if (!video.snapshots || video.snapshots.length === 0) return null;
     if (offset === 'latest') {
+      if (!video.snapshots || video.snapshots.length === 0) return null;
       return video.snapshots[video.snapshots.length - 1];
     }
+    // 1時間後はトラッカー側の手入力データを優先
+    if (offset === '1h') {
+      const trackerSnap = getTrackerSnapshot1h(video);
+      if (trackerSnap) return trackerSnap;
+      return null; // トラッカー未入力なら未取得扱い
+    }
+    if (!video.snapshots || video.snapshots.length === 0) return null;
     // targetOffset が一致するスナップショットを返す（完全合致）
     const matched = video.snapshots.find(s => s.targetOffset === offset);
     return matched || null;
