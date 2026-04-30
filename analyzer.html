@@ -292,9 +292,13 @@
         <div style="margin-bottom: 8px;">Firestoreの容量制限（1MB）対策。不要な過去データを削除します。</div>
         <div id="dataSizeStatus" style="margin-bottom: 8px; font-weight: 700; font-size: 11px; color: var(--text-muted);">サイズ計算中...</div>
         <button id="cleanupOldFieldsBtn" class="btn btn-sm btn-primary">🧹 古い概要欄・タグデータを削除</button>
+        <div style="font-size: 10px; color: var(--text-muted); margin: 6px 0 12px;">
+          💡 概要欄(description)・タグ(tags)は分析に使われていないため削除しても問題ありません。
+        </div>
+        <button id="pruneSnapshotsBtn" class="btn btn-sm btn-primary">📸 古いスナップショットを削除</button>
         <div style="font-size: 10px; color: var(--text-muted); margin-top: 6px;">
-          💡 概要欄(description)・タグ(tags)は分析に使われていないため削除しても問題ありません。<br>
-          💡 削除後は容量に余裕ができ、スナップショット取得が可能になります。
+          💡 重要ポイント（1時間後/1日後/1週間後/1ヶ月後）と最新スナップショット以外を削除します。<br>
+          💡 スナップショット取得ボタンを押した時も同じ間引き処理が自動で実行されます。
         </div>
       </div>
     </div>
@@ -748,6 +752,29 @@
     }
   }
 
+  // スナップショット間引き：targetOffset付き + 各動画の最新1本だけ残す
+  // 戻り値: { totalBefore, totalAfter, removedCount }
+  function pruneSnapshotsAll() {
+    let totalBefore = 0, totalAfter = 0;
+    videos.forEach(v => {
+      const snaps = v.snapshots || [];
+      totalBefore += snaps.length;
+      if (snaps.length === 0) return;
+      // 時系列順にソート（古い順）
+      const sorted = [...snaps].sort((a, b) => new Date(a.at) - new Date(b.at));
+      const latestAt = sorted[sorted.length - 1].at;
+      // targetOffset付き、または最新スナップショットのみ残す
+      const kept = sorted.filter(s => s.targetOffset || s.at === latestAt);
+      v.snapshots = kept;
+      totalAfter += kept.length;
+    });
+    return {
+      totalBefore,
+      totalAfter,
+      removedCount: totalBefore - totalAfter
+    };
+  }
+
   // スナップショット取得
   async function snapshotVideos(videoIds) {
     if (videoIds.length === 0) return;
@@ -766,6 +793,8 @@
         });
         v.title = info.snippet.title;
       }
+      // 取得後に自動で間引き（重要ポイント+最新のみ残す）
+      pruneSnapshotsAll();
       await saveFirestoreData();
       renderAll();
     } catch (err) {
@@ -1591,15 +1620,77 @@
         if (v.description) removable += new Blob([JSON.stringify(v.description)]).size;
         if (v.tags) removable += new Blob([JSON.stringify(v.tags)]).size;
       });
+      // 間引き可能なスナップショット本数を計算
+      let totalSnaps = 0, willKeep = 0;
+      videos.forEach(v => {
+        const snaps = v.snapshots || [];
+        totalSnaps += snaps.length;
+        if (snaps.length === 0) return;
+        const sorted = [...snaps].sort((a, b) => new Date(a.at) - new Date(b.at));
+        const latestAt = sorted[sorted.length - 1].at;
+        willKeep += sorted.filter(s => s.targetOffset || s.at === latestAt).length;
+      });
+      const prunableSnaps = totalSnaps - willKeep;
+      
       el.style.color = color;
-      el.innerHTML = `${icon} 現在のサイズ: ${(bytes/1024).toFixed(1)} KB / 1024 KB (${pct}%)`
-        + (removable > 0 ? `<br>　削除可能: ${(removable/1024).toFixed(1)} KB（古い概要欄・タグデータ）` : `<br>　削除可能データなし`);
+      let html = `${icon} 現在のサイズ: ${(bytes/1024).toFixed(1)} KB / 1024 KB (${pct}%)`;
+      if (removable > 0) html += `<br>　削除可能: ${(removable/1024).toFixed(1)} KB（古い概要欄・タグ）`;
+      if (prunableSnaps > 0) html += `<br>　間引き可能: ${prunableSnaps}本のスナップショット`;
+      if (removable === 0 && prunableSnaps === 0) html += `<br>　削除可能データなし`;
+      el.innerHTML = html;
     } catch (e) {
       el.textContent = 'サイズ計算エラー';
     }
   }
   
-  // 古いdescription/tagsを削除
+  // 古いスナップショットを間引き（手動実行）
+  async function manualPruneSnapshots() {
+    const sizeBefore = new Blob([JSON.stringify({ channels, videos })]).size;
+    // 削除予定本数の事前計算
+    let totalSnaps = 0, willKeep = 0;
+    videos.forEach(v => {
+      const snaps = v.snapshots || [];
+      totalSnaps += snaps.length;
+      if (snaps.length === 0) return;
+      const sorted = [...snaps].sort((a, b) => new Date(a.at) - new Date(b.at));
+      const latestAt = sorted[sorted.length - 1].at;
+      willKeep += sorted.filter(s => s.targetOffset || s.at === latestAt).length;
+    });
+    const willDelete = totalSnaps - willKeep;
+    
+    if (willDelete === 0) {
+      alert('削除対象のスナップショットはありませんでした');
+      return;
+    }
+    
+    if (!confirm(
+      `スナップショットを間引きます:\n\n` +
+      `📸 全${totalSnaps}本のスナップショット\n` +
+      `  ✅ 残す: ${willKeep}本（重要ポイント + 各動画の最新1本）\n` +
+      `  ❌ 削除: ${willDelete}本\n\n` +
+      `※ 削除後はFirestoreに即時保存されます。\n` +
+      `※ 元には戻せません。実行しますか？`
+    )) {
+      return;
+    }
+    
+    try {
+      const result = pruneSnapshotsAll();
+      await saveFirestoreData();
+      const sizeAfter = new Blob([JSON.stringify({ channels, videos })]).size;
+      const reducedBytes = sizeBefore - sizeAfter;
+      alert(
+        `✅ ${result.removedCount}本のスナップショットを削除しました\n` +
+        `📦 ${(sizeBefore/1024).toFixed(1)} KB → ${(sizeAfter/1024).toFixed(1)} KB\n` +
+        `📉 ${(reducedBytes/1024).toFixed(1)} KB 削減`
+      );
+      updateDataSizeStatus();
+      renderAll();
+    } catch (err) {
+      alert('保存エラー: ' + err.message);
+    }
+  }
+  
   async function cleanupOldFields() {
     let removedDesc = 0, removedTags = 0;
     let removedBytes = 0;
@@ -1645,6 +1736,7 @@
   document.getElementById('settingsBtn').addEventListener('click', openSettingsModal);
   document.getElementById('closeSettingsBtn').addEventListener('click', closeSettingsModal);
   document.getElementById('cleanupOldFieldsBtn').addEventListener('click', cleanupOldFields);
+  document.getElementById('pruneSnapshotsBtn').addEventListener('click', manualPruneSnapshots);
   document.getElementById('settingsModal').addEventListener('click', (e) => {
     if (e.target.id === 'settingsModal') closeSettingsModal();
   });
