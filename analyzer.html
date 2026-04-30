@@ -2910,7 +2910,8 @@
           groupPoints.push({
             x: new Date(v.publishedAt).getTime(),
             y: snap.views,
-            title: v.title, videoId: v.videoId, vid: v.id, channelTitle: v.channelTitle
+            title: v.title, videoId: v.videoId, vid: v.id, channelTitle: v.channelTitle,
+            thumbnailUrl: v.thumbnailUrl || ''
           });
         }
         allPoints = allPoints.concat(groupPoints);
@@ -2937,7 +2938,8 @@
         points.push({
           x: new Date(v.publishedAt).getTime(),
           y: snap.views,
-          title: v.title, videoId: v.videoId, vid: v.id, channelTitle: v.channelTitle
+          title: v.title, videoId: v.videoId, vid: v.id, channelTitle: v.channelTitle,
+          thumbnailUrl: v.thumbnailUrl || ''
         });
       }
       allPoints = points;
@@ -2997,20 +2999,101 @@
       }
     };
     
-    const commonTooltip = {
-      callbacks: {
-        label: (item) => {
-          const d = item.raw;
-          const date = new Date(d.x);
-          const dateStr = `${date.getFullYear()}/${date.getMonth()+1}/${date.getDate()}`;
-          return [
-            d.channelTitle ? `[${d.channelTitle}]` : '',
-            d.title,
-            `投稿日: ${dateStr}`,
-            `再生数: ${d.y.toLocaleString()}`
-          ].filter(x => x);
-        }
+    // カスタムHTMLツールチップ：サムネ付き
+    // Chart.jsの external callback で使う
+    function ensureTooltipEl() {
+      let el = document.getElementById('chartTooltipBox');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'chartTooltipBox';
+        el.style.cssText = `
+          position: absolute;
+          pointer-events: none;
+          z-index: 10000;
+          background: rgba(20, 20, 28, 0.95);
+          color: #fff;
+          border: 2px solid rgba(255, 255, 255, 0.15);
+          border-radius: 8px;
+          padding: 8px;
+          font-size: 12px;
+          line-height: 1.4;
+          max-width: 280px;
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+          opacity: 0;
+          transition: opacity 0.15s ease;
+          font-family: 'M PLUS Rounded 1c', sans-serif;
+        `;
+        document.body.appendChild(el);
       }
+      return el;
+    }
+    
+    function externalTooltipHandler(context) {
+      const tooltip = context.tooltip;
+      const el = ensureTooltipEl();
+      
+      // 非表示
+      if (tooltip.opacity === 0) {
+        el.style.opacity = '0';
+        return;
+      }
+      
+      // データ取得
+      const dataPoint = tooltip.dataPoints?.[0];
+      if (!dataPoint) return;
+      const d = dataPoint.raw || {};
+      const fallbackTitle = dataPoint.label || '';
+      const fallbackY = dataPoint.parsed?.y;
+      
+      // 内容構築
+      const thumbHtml = d.thumbnailUrl
+        ? `<img src="${d.thumbnailUrl}" alt="" style="width: 142px; height: 80px; object-fit: cover; border-radius: 4px; display: block; margin-bottom: 6px; background: #000;" loading="lazy">`
+        : '';
+      const channelHtml = d.channelTitle
+        ? `<div style="font-size: 10px; color: #ffd93d; font-weight: 800; margin-bottom: 2px;">[${escapeHtml(d.channelTitle)}]</div>`
+        : '';
+      const titleStr = d.title || fallbackTitle || '';
+      const titleHtml = titleStr
+        ? `<div style="font-weight: 700; margin-bottom: 4px; word-break: break-word;">${escapeHtml(titleStr)}</div>`
+        : '';
+      let dateHtml = '';
+      if (d.x) {
+        const date = new Date(d.x);
+        dateHtml = `<div style="font-size: 11px; color: #cfcfd8;">📅 ${date.getFullYear()}/${date.getMonth()+1}/${date.getDate()}</div>`;
+      }
+      const viewVal = (d.y !== undefined ? d.y : fallbackY);
+      const viewHtml = (viewVal !== undefined && viewVal !== null)
+        ? `<div style="font-size: 11px; color: #ff7eb6; font-weight: 800;">👀 ${viewVal.toLocaleString()}</div>`
+        : '';
+      el.innerHTML = thumbHtml + channelHtml + titleHtml + dateHtml + viewHtml;
+      
+      // 位置（Chartコンテナに対するtooltip座標 → ページ座標へ変換）
+      const canvas = context.chart.canvas;
+      const rect = canvas.getBoundingClientRect();
+      const left = rect.left + window.scrollX + tooltip.caretX;
+      const top = rect.top + window.scrollY + tooltip.caretY;
+      // 画面右端からはみ出しそうなら左にオフセット
+      el.style.opacity = '1';
+      el.style.left = left + 'px';
+      el.style.top = top + 'px';
+      // レイアウト確定後にはみ出しを補正
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight + window.scrollY;
+      let finalLeft = left + 12;
+      let finalTop = top - h - 12;
+      if (finalLeft + w > vw - 8) finalLeft = left - w - 12;
+      if (finalLeft < 8) finalLeft = 8;
+      if (finalTop < window.scrollY + 8) finalTop = top + 16;
+      if (finalTop + h > vh - 8) finalTop = vh - h - 8;
+      el.style.left = finalLeft + 'px';
+      el.style.top = finalTop + 'px';
+    }
+    
+    const commonTooltip = {
+      enabled: false, // デフォルトツールチップを無効化
+      external: externalTooltipHandler
     };
     
     if (state.type === 'scatter') {
@@ -3093,12 +3176,28 @@
           plugins: {
             legend: { display: false },
             tooltip: {
-              callbacks: {
-                title: (items) => {
-                  const p = sorted[items[0].dataIndex];
-                  return [p.channelTitle ? `[${p.channelTitle}]` : '', p.title].filter(x => x).join(' ');
-                },
-                label: (item) => `再生数: ${item.parsed.y.toLocaleString()}`
+              enabled: false,
+              external: function(context) {
+                // 棒グラフの場合、raw ではなく dataIndex から sorted を引く
+                const tooltip = context.tooltip;
+                const el = ensureTooltipEl();
+                if (tooltip.opacity === 0) { el.style.opacity = '0'; return; }
+                const dp = tooltip.dataPoints?.[0];
+                if (!dp) return;
+                const p = sorted[dp.dataIndex] || {};
+                // 散布図用ハンドラと同じ形式に変換して再利用
+                const fakeContext = {
+                  chart: context.chart,
+                  tooltip: {
+                    ...tooltip,
+                    dataPoints: [{
+                      raw: p,
+                      parsed: { y: p.y },
+                      label: p.title
+                    }]
+                  }
+                };
+                externalTooltipHandler(fakeContext);
               }
             }
           },
