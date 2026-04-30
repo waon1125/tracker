@@ -564,7 +564,15 @@
         } else {
           channels = data.channels || { copi: null, waon: null, rivals: [] };
           if (!channels.rivals) channels.rivals = [];
-          videos = data.videos || [];
+          // tabKey未設定の動画（GitHub Actions経由で追加されたものなど）を救済
+          const rawVideos = data.videos || [];
+          const missingCount = rawVideos.filter(v => !v.tabKey).length;
+          videos = rawVideos.map(v => v.tabKey ? v : { ...v, tabKey: detectTabKey(v) });
+          // 救済対象があった場合は Firestore にも上書き保存（次回以降の判定で正しく扱われるように）
+          if (missingCount > 0) {
+            console.log(`[Firestore] tabKey未設定の動画 ${missingCount}本を救済しました`);
+            await saveFirestoreData();
+          }
         }
         firestoreLastSaved = JSON.stringify({ channels, videos });
       } else {
@@ -617,7 +625,8 @@
         const data = snap.data();
         const newChannels = data.channels || { copi: null, waon: null, rivals: [] };
         if (!newChannels.rivals) newChannels.rivals = [];
-        const newVideos = data.videos || [];
+        // tabKey未設定の動画（GitHub Actions経由で追加されたものなど）を救済
+        const newVideos = (data.videos || []).map(v => v.tabKey ? v : { ...v, tabKey: detectTabKey(v) });
         const json = JSON.stringify({ channels: newChannels, videos: newVideos });
         if (json === firestoreLastSaved) return;
         channels = newChannels;
