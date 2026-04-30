@@ -286,6 +286,19 @@
       </div>
     </div>
     
+    <div style="margin-bottom: 16px;">
+      <div style="font-size: 13px; font-weight: 800; margin-bottom: 6px;">🧹 データメンテナンス</div>
+      <div style="padding: 10px; background: var(--dim-bg); border: 2px solid var(--card-border); border-radius: 8px; font-size: 12px;">
+        <div style="margin-bottom: 8px;">Firestoreの容量制限（1MB）対策。不要な過去データを削除します。</div>
+        <div id="dataSizeStatus" style="margin-bottom: 8px; font-weight: 700; font-size: 11px; color: var(--text-muted);">サイズ計算中...</div>
+        <button id="cleanupOldFieldsBtn" class="btn btn-sm btn-primary">🧹 古い概要欄・タグデータを削除</button>
+        <div style="font-size: 10px; color: var(--text-muted); margin-top: 6px;">
+          💡 概要欄(description)・タグ(tags)は分析に使われていないため削除しても問題ありません。<br>
+          💡 削除後は容量に余裕ができ、スナップショット取得が可能になります。
+        </div>
+      </div>
+    </div>
+    
     <div style="text-align: right; margin-top: 16px;">
       <button class="btn btn-ghost" id="closeSettingsBtn">閉じる</button>
     </div>
@@ -699,7 +712,6 @@
             id: 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
             videoId: info.id,
             title: info.snippet.title,
-            description: (info.snippet.description || '').slice(0, 500),
             channelId: info.snippet.channelId,
             channelTitle: info.snippet.channelTitle,
             tabKey: tabKey,
@@ -707,7 +719,7 @@
             publishedAt: info.snippet.publishedAt,
             duration: info.contentDetails.duration,
             videoKind: kind, // 'normal' | 'short' | 'live' | 'live_archive'
-            tags: info.snippet.tags || [],
+            // description / tags は容量削減のため保存しない（2026-04-30〜）
             snapshots: [{
               at: now,
               views: parseInt(info.statistics.viewCount || 0),
@@ -1355,11 +1367,6 @@
           <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 3px;">📺 ${escapeHtml(v.channelTitle)}</div>
           <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 3px;">📅 ${published.toLocaleString('ja-JP')}</div>
           <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">⏱️ ${formatDuration(v.duration)}</div>
-          ${v.tags && v.tags.length > 0 ? `
-            <div style="margin-bottom: 6px;">
-              ${v.tags.slice(0, 8).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('')}
-            </div>
-          ` : ''}
           <a href="https://www.youtube.com/watch?v=${v.videoId}" target="_blank" class="btn btn-sm">▶️ YouTubeで見る</a>
         </div>
       </div>
@@ -1562,10 +1569,82 @@
       loginBtn.classList.remove('hidden');
       logoutBtn.classList.add('hidden');
     }
+    // データサイズ表示
+    updateDataSizeStatus();
+  }
+  
+  // データサイズを表示
+  function updateDataSizeStatus() {
+    const el = document.getElementById('dataSizeStatus');
+    if (!el) return;
+    try {
+      const bytes = new Blob([JSON.stringify({ channels, videos })]).size;
+      const limit = 1048576;
+      const pct = (bytes / limit * 100).toFixed(1);
+      let icon = '✅';
+      let color = 'var(--text-muted)';
+      if (bytes > limit) { icon = '🚨'; color = 'var(--danger)'; }
+      else if (bytes > limit * 0.85) { icon = '⚠️'; color = '#e67e22'; }
+      // 削除可能なdescription/tagsの容量を計算
+      let removable = 0;
+      videos.forEach(v => {
+        if (v.description) removable += new Blob([JSON.stringify(v.description)]).size;
+        if (v.tags) removable += new Blob([JSON.stringify(v.tags)]).size;
+      });
+      el.style.color = color;
+      el.innerHTML = `${icon} 現在のサイズ: ${(bytes/1024).toFixed(1)} KB / 1024 KB (${pct}%)`
+        + (removable > 0 ? `<br>　削除可能: ${(removable/1024).toFixed(1)} KB（古い概要欄・タグデータ）` : `<br>　削除可能データなし`);
+    } catch (e) {
+      el.textContent = 'サイズ計算エラー';
+    }
+  }
+  
+  // 古いdescription/tagsを削除
+  async function cleanupOldFields() {
+    let removedDesc = 0, removedTags = 0;
+    let removedBytes = 0;
+    videos.forEach(v => {
+      if (v.description) {
+        removedBytes += new Blob([JSON.stringify(v.description)]).size;
+        delete v.description;
+        removedDesc++;
+      }
+      if (v.tags) {
+        removedBytes += new Blob([JSON.stringify(v.tags)]).size;
+        delete v.tags;
+        removedTags++;
+      }
+    });
+    if (removedDesc === 0 && removedTags === 0) {
+      alert('削除対象のデータはありませんでした');
+      return;
+    }
+    const sizeBefore = new Blob([JSON.stringify({ channels, videos })]).size + removedBytes;
+    const sizeAfter = new Blob([JSON.stringify({ channels, videos })]).size;
+    if (!confirm(
+      `以下のデータを削除します:\n\n` +
+      `・概要欄(description): ${removedDesc}本から削除\n` +
+      `・タグ(tags): ${removedTags}本から削除\n\n` +
+      `📦 サイズ: ${(sizeBefore/1024).toFixed(1)} KB → ${(sizeAfter/1024).toFixed(1)} KB\n` +
+      `📉 削減量: ${(removedBytes/1024).toFixed(1)} KB\n\n` +
+      `※ 削除後はFirestoreに即時保存されます。実行しますか？`
+    )) {
+      // キャンセルされた場合、削除した値を復元できないので警告
+      alert('キャンセルしました。ページをリロードして元のデータを再取得してください。');
+      return;
+    }
+    try {
+      await saveFirestoreData();
+      alert(`✅ ${(removedBytes/1024).toFixed(1)} KB 削減しました！`);
+      updateDataSizeStatus();
+    } catch (err) {
+      alert('保存エラー: ' + err.message + '\n再度お試しください。');
+    }
   }
   
   document.getElementById('settingsBtn').addEventListener('click', openSettingsModal);
   document.getElementById('closeSettingsBtn').addEventListener('click', closeSettingsModal);
+  document.getElementById('cleanupOldFieldsBtn').addEventListener('click', cleanupOldFields);
   document.getElementById('settingsModal').addEventListener('click', (e) => {
     if (e.target.id === 'settingsModal') closeSettingsModal();
   });
