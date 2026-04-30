@@ -1806,9 +1806,13 @@
       const m = String(published.getMonth() + 1).padStart(2, '0');
       const d = String(published.getDate()).padStart(2, '0');
       const dateStr = `${y}-${m}-${d}`;
+      const durationStr = v.duration ? formatDuration(v.duration) : '';
       return `
         <div class="video-card">
-          <img src="${escapeHtml(v.thumbnailUrl)}" alt="" class="video-thumb">
+          <div class="video-thumb-wrap" style="display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0;">
+            <img src="${escapeHtml(v.thumbnailUrl)}" alt="" class="video-thumb">
+            ${durationStr ? `<div style="font-size: 11px; font-weight: 800; color: var(--text-muted); font-variant-numeric: tabular-nums;">⏱️ ${durationStr}</div>` : ''}
+          </div>
           <div class="video-info">
             <div class="video-title" title="${escapeHtml(v.title)}">${escapeHtml(v.title)}</div>
             <div class="video-meta">📺 ${escapeHtml(v.channelTitle)} · 📅 ${dateStr} · 追跡: ${v.snapshots?.length || 0}回</div>
