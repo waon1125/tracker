@@ -338,9 +338,9 @@
       <div style="padding: 10px; background: var(--dim-bg); border: 2px solid var(--card-border); border-radius: 8px; font-size: 12px;">
         <div style="margin-bottom: 8px;">Firestoreの容量制限（1MB）対策。不要な過去データを削除します。</div>
         <div id="dataSizeStatus" style="margin-bottom: 8px; font-weight: 700; font-size: 11px; color: var(--text-muted);">サイズ計算中...</div>
-        <button id="cleanupOldFieldsBtn" class="btn btn-sm btn-primary">🧹 古い概要欄・タグデータを削除</button>
+        <button id="cleanupOldFieldsBtn" class="btn btn-sm btn-primary">🧹 不要な古いデータを削除</button>
         <div style="font-size: 10px; color: var(--text-muted); margin: 6px 0 12px;">
-          💡 概要欄(description)・タグ(tags)は分析に使われていないため削除しても問題ありません。
+          💡 概要欄・タグ・サムネURL（videoIdから復元可能）・古い詳細データ履歴を削除します。維持率などの最新データは残ります。
         </div>
         <button id="pruneSnapshotsBtn" class="btn btn-sm btn-primary">📸 古いスナップショットを削除</button>
         <div style="font-size: 10px; color: var(--text-muted); margin-top: 6px;">
@@ -949,7 +949,7 @@
             channelId: info.snippet.channelId,
             channelTitle: info.snippet.channelTitle,
             tabKey: tabKey,
-            thumbnailUrl: info.snippet.thumbnails?.medium?.url || info.snippet.thumbnails?.default?.url || '',
+            // thumbnailUrl は videoId から動的生成するため保存しない（容量削減）
             publishedAt: info.snippet.publishedAt,
             duration: info.contentDetails.duration,
             videoKind: kind, // 'normal' | 'short' | 'live' | 'live_archive'
@@ -983,7 +983,7 @@
   }
 
   // スナップショット間引き：targetOffset付き + 各動画の最新1本だけ残す
-  // analyticsSnapshots も最新1件だけに圧縮
+  // analyticsSnapshots は完全削除（analytics に最新データを保持済みなので不要）
   // 戻り値: { totalBefore, totalAfter, removedCount, analyticsRemoved }
   function pruneSnapshotsAll() {
     let totalBefore = 0, totalAfter = 0, analyticsRemoved = 0;
@@ -999,15 +999,17 @@
         v.snapshots = kept;
         totalAfter += kept.length;
       }
-      // analyticsSnapshots は最新1件だけ残す
-      const aSnaps = v.analyticsSnapshots || [];
-      if (aSnaps.length > 1) {
-        const sortedA = [...aSnaps].sort((a, b) => new Date(a.at) - new Date(b.at));
-        const latest = sortedA[sortedA.length - 1];
-        v.analyticsSnapshots = [latest];
-        // v.analytics も最新に揃える（互換用）
-        v.analytics = { ...latest, fetchedAt: latest.at };
-        analyticsRemoved += (aSnaps.length - 1);
+      // analyticsSnapshots は完全削除（analytics 1件で十分なため）
+      if (v.analyticsSnapshots) {
+        const removed = (v.analyticsSnapshots || []).length;
+        // analytics が空ならanalyticsSnapshotsの最新を移植してから削除
+        if (!v.analytics && removed > 0) {
+          const sortedA = [...v.analyticsSnapshots].sort((a, b) => new Date(a.at) - new Date(b.at));
+          const latest = sortedA[sortedA.length - 1];
+          v.analytics = { ...latest, fetchedAt: latest.at };
+        }
+        delete v.analyticsSnapshots;
+        analyticsRemoved += removed;
       }
     });
     return {
@@ -1250,28 +1252,33 @@
       const analyticsBtn = container.querySelector('[data-fixed-analytics]');
       if (analyticsBtn) {
         analyticsBtn.addEventListener('click', async () => {
+          // ★重要：ボタンクリック時点の最新 videos から再取得（Firestoreリスナー更新でクロージャがズレるバグ対策）
+          const freshVids = videos.filter(v => v.tabKey === tabKey);
           console.log('[一斉取得] ボタンクリック');
           console.log('[一斉取得] OAuth:', isOAuthAuthenticated(), 'トークン長:', oauthAccessToken?.length);
-          console.log('[一斉取得] 動画数:', vids.length);
+          console.log('[一斉取得] 動画数:', freshVids.length);
           if (!isOAuthAuthenticated()) {
             alert('⚠️ まず⚙️設定から「🔐 YouTube連携」してください');
             return;
           }
-          if (vids.length === 0) { alert('動画が登録されていません'); return; }
-          if (!confirm(`${vids.length}本の動画の詳細データ（維持率等）を取得します。\n⚠️ 自分のチャンネルかつOAuth認証済みの場合のみ動作します。`)) return;
-          analyticsBtn.disabled = true; analyticsBtn.textContent = '⏳ 取得中... (0/' + vids.length + ')';
+          if (freshVids.length === 0) { alert('動画が登録されていません'); return; }
+          if (!confirm(`${freshVids.length}本の動画の詳細データ（維持率等）を取得します。\n⚠️ 自分のチャンネルかつOAuth認証済みの場合のみ動作します。\n※ 既存の動画も最新データで上書きされます。`)) return;
+          analyticsBtn.disabled = true; analyticsBtn.textContent = '⏳ 取得中... (0/' + freshVids.length + ')';
           let ok = 0, fail = 0;
           const errors = [];
-          for (let i = 0; i < vids.length; i++) {
-            const v = vids[i];
+          for (let i = 0; i < freshVids.length; i++) {
+            const v = freshVids[i];
             try {
-              console.log(`[一斉取得] ${i+1}/${vids.length}: ${v.title}`);
+              console.log(`[一斉取得] ${i+1}/${freshVids.length}: ${v.title}`);
               const data = await fetchAnalytics(v.videoId, v.publishedAt);
               if (data) {
                 const snapshot = { ...data, at: new Date().toISOString() };
-                // analyticsSnapshots は最新1件のみ保持（容量削減のため）
-                v.analyticsSnapshots = [snapshot];
-                v.analytics = { ...snapshot, fetchedAt: snapshot.at };
+                // ★ videos配列の中の本物のレコードを探して上書き（参照ズレ対策）
+                const realV = videos.find(x => x.videoId === v.videoId);
+                if (realV) {
+                  realV.analytics = { ...snapshot, fetchedAt: snapshot.at };
+                  if (realV.analyticsSnapshots) delete realV.analyticsSnapshots;
+                }
                 ok++;
               } else {
                 fail++;
@@ -1286,7 +1293,7 @@
                 break;
               }
             }
-            analyticsBtn.textContent = '⏳ 取得中... (' + (i+1) + '/' + vids.length + ')';
+            analyticsBtn.textContent = '⏳ 取得中... (' + (i+1) + '/' + freshVids.length + ')';
             await new Promise(r => setTimeout(r, 300));
           }
           await saveFirestoreData();
@@ -2018,7 +2025,7 @@
       return `
         <div class="video-card">
           <div class="video-thumb-wrap" style="display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0;">
-            <img src="${escapeHtml(v.thumbnailUrl)}" alt="" class="video-thumb">
+            <img src="${escapeHtml(getThumbnailUrl(v))}" alt="" class="video-thumb">
             ${durationStr ? `<div style="font-size: 11px; font-weight: 800; color: var(--text-muted); font-variant-numeric: tabular-nums;">⏱️ ${durationStr}</div>` : ''}
           </div>
           <div class="video-info">
@@ -2067,7 +2074,7 @@
     
     document.getElementById('videoDetailContent').innerHTML = `
       <div style="display: flex; gap: 14px; margin-bottom: 12px; flex-wrap: wrap;">
-        <img src="${escapeHtml(v.thumbnailUrl)}" style="width: 220px; height: 124px; object-fit: cover; border-radius: 8px; border: 2px solid var(--card-border);">
+        <img src="${escapeHtml(getThumbnailUrl(v))}" style="width: 220px; height: 124px; object-fit: cover; border-radius: 8px; border: 2px solid var(--card-border);">
         <div style="flex: 1; min-width: 240px;">
           <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 3px;">📺 ${escapeHtml(v.channelTitle)}</div>
           <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 3px;">📅 ${published.toLocaleString('ja-JP')}</div>
@@ -2167,7 +2174,7 @@
         if (!video) return;
         if (!confirm(`⚠️ この動画の全スナップショット履歴を削除しますか？\n\n現在 ${(video.snapshots || []).length} 件あります。\n※ Analytics詳細データも含めて削除されます`)) return;
         video.snapshots = [];
-        video.analyticsSnapshots = [];
+        delete video.analyticsSnapshots;
         video.analytics = null;
         await saveFirestoreData();
         renderAll();
@@ -2321,8 +2328,8 @@
           const latestAt = sorted[sorted.length - 1].at;
           willKeep += sorted.filter(s => s.targetOffset || s.at === latestAt).length;
         }
-        const aSnaps = v.analyticsSnapshots || [];
-        if (aSnaps.length > 1) analyticsExtra += (aSnaps.length - 1);
+        // analyticsSnapshots は完全削除対象（analyticsだけ残す）
+        if (v.analyticsSnapshots) analyticsExtra += (v.analyticsSnapshots.length || 1);
       });
       const prunableSnaps = totalSnaps - willKeep;
       
@@ -2330,7 +2337,7 @@
       let html = `${icon} 現在のサイズ: ${(bytes/1024).toFixed(1)} KB / 1024 KB (${pct}%)`;
       if (removable > 0) html += `<br>　削除可能: ${(removable/1024).toFixed(1)} KB（古い概要欄・タグ）`;
       if (prunableSnaps > 0) html += `<br>　間引き可能: ${prunableSnaps}本のスナップショット`;
-      if (analyticsExtra > 0) html += `<br>　間引き可能: ${analyticsExtra}件の詳細データ履歴`;
+      if (analyticsExtra > 0) html += `<br>　削除可能: ${analyticsExtra}件の不要な詳細データ履歴`;
       if (removable === 0 && prunableSnaps === 0 && analyticsExtra === 0) html += `<br>　削除可能データなし`;
       el.innerHTML = html;
     } catch (e) {
@@ -2352,8 +2359,8 @@
         const latestAt = sorted[sorted.length - 1].at;
         willKeep += sorted.filter(s => s.targetOffset || s.at === latestAt).length;
       }
-      const aSnaps = v.analyticsSnapshots || [];
-      if (aSnaps.length > 1) analyticsExtra += (aSnaps.length - 1);
+      // analyticsSnapshots は完全削除対象
+      if (v.analyticsSnapshots) analyticsExtra += (v.analyticsSnapshots.length || 1);
     });
     const willDelete = totalSnaps - willKeep;
     
@@ -2395,7 +2402,7 @@
   }
   
   async function cleanupOldFields() {
-    let removedDesc = 0, removedTags = 0;
+    let removedDesc = 0, removedTags = 0, removedThumb = 0, removedAnalSnap = 0;
     let removedBytes = 0;
     videos.forEach(v => {
       if (v.description) {
@@ -2408,22 +2415,43 @@
         delete v.tags;
         removedTags++;
       }
+      // thumbnailUrl は videoId から復元できるので削除（容量削減）
+      if (v.thumbnailUrl && v.videoId) {
+        removedBytes += new Blob([JSON.stringify(v.thumbnailUrl)]).size;
+        delete v.thumbnailUrl;
+        removedThumb++;
+      }
+      // analyticsSnapshots は analytics に最新が保存されているため削除
+      if (v.analyticsSnapshots) {
+        removedBytes += new Blob([JSON.stringify(v.analyticsSnapshots)]).size;
+        // analyticsが空の場合、analyticsSnapshotsの最新を移植してから削除
+        if (!v.analytics && v.analyticsSnapshots.length > 0) {
+          const sortedA = [...v.analyticsSnapshots].sort((a, b) => new Date(a.at) - new Date(b.at));
+          const latest = sortedA[sortedA.length - 1];
+          v.analytics = { ...latest, fetchedAt: latest.at };
+        }
+        delete v.analyticsSnapshots;
+        removedAnalSnap++;
+      }
     });
-    if (removedDesc === 0 && removedTags === 0) {
+    if (removedDesc === 0 && removedTags === 0 && removedThumb === 0 && removedAnalSnap === 0) {
       alert('削除対象のデータはありませんでした');
       return;
     }
     const sizeBefore = new Blob([JSON.stringify({ channels, videos })]).size + removedBytes;
     const sizeAfter = new Blob([JSON.stringify({ channels, videos })]).size;
+    const lines = [];
+    if (removedDesc > 0) lines.push(`・概要欄(description): ${removedDesc}本から削除`);
+    if (removedTags > 0) lines.push(`・タグ(tags): ${removedTags}本から削除`);
+    if (removedThumb > 0) lines.push(`・サムネURL(thumbnailUrl): ${removedThumb}本から削除（videoIdから復元）`);
+    if (removedAnalSnap > 0) lines.push(`・詳細データ履歴(analyticsSnapshots): ${removedAnalSnap}本から削除（analyticsに最新保持）`);
     if (!confirm(
       `以下のデータを削除します:\n\n` +
-      `・概要欄(description): ${removedDesc}本から削除\n` +
-      `・タグ(tags): ${removedTags}本から削除\n\n` +
+      lines.join('\n') + `\n\n` +
       `📦 サイズ: ${(sizeBefore/1024).toFixed(1)} KB → ${(sizeAfter/1024).toFixed(1)} KB\n` +
       `📉 削減量: ${(removedBytes/1024).toFixed(1)} KB\n\n` +
       `※ 削除後はFirestoreに即時保存されます。実行しますか？`
     )) {
-      // キャンセルされた場合、削除した値を復元できないので警告
       alert('キャンセルしました。ページをリロードして元のデータを再取得してください。');
       return;
     }
@@ -2734,9 +2762,8 @@
       }
       // 最新1件のみ保持（容量削減のため、時系列蓄積は廃止）
       const snapshot = { ...data, at: new Date().toISOString() };
-      v.analyticsSnapshots = [snapshot];
-      // 最新のもの（互換用）
       v.analytics = { ...snapshot, fetchedAt: snapshot.at };
+      if (v.analyticsSnapshots) delete v.analyticsSnapshots;
       await saveFirestoreData();
       section.innerHTML = renderAnalyticsData(v.analytics, v);
       section.querySelector('[data-refetch-analytics]')?.addEventListener('click', () => fetchAndShowAnalytics(v));
@@ -2809,6 +2836,14 @@
     if (s == null) return '';
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  }
+  
+  // 動画オブジェクトから thumbnailUrl を取得（保存していない場合は videoId から組み立て）
+  // YouTube公式CDN形式：https://i.ytimg.com/vi/{videoId}/mqdefault.jpg (320×180)
+  function getThumbnailUrl(v) {
+    if (v && v.thumbnailUrl) return v.thumbnailUrl;
+    if (v && v.videoId) return `https://i.ytimg.com/vi/${v.videoId}/mqdefault.jpg`;
+    return '';
   }
   
   // ==== 再生数グラフ（タブ別・比較用） ====
@@ -2911,7 +2946,7 @@
             x: new Date(v.publishedAt).getTime(),
             y: snap.views,
             title: v.title, videoId: v.videoId, vid: v.id, channelTitle: v.channelTitle,
-            thumbnailUrl: v.thumbnailUrl || ''
+            thumbnailUrl: getThumbnailUrl(v)
           });
         }
         allPoints = allPoints.concat(groupPoints);
@@ -2939,7 +2974,7 @@
           x: new Date(v.publishedAt).getTime(),
           y: snap.views,
           title: v.title, videoId: v.videoId, vid: v.id, channelTitle: v.channelTitle,
-          thumbnailUrl: v.thumbnailUrl || ''
+          thumbnailUrl: getThumbnailUrl(v)
         });
       }
       allPoints = points;
