@@ -370,6 +370,25 @@
   </div>
 </div>
 
+<!-- 時間枠編集モーダル -->
+<div class="modal-overlay" id="bucketEditModal">
+  <div class="modal" style="max-width: 540px;">
+    <div class="modal-title">
+      <span>🎯</span><span>時間枠の編集</span>
+      <span id="bucketEditModalTab" style="font-size: 13px; color: var(--text-muted); margin-left: 8px;"></span>
+    </div>
+    <p class="hint" style="margin-bottom: 12px;">💡 各区間を分:秒で指定。区間が重なった場合、動画はより狭い区間に振り分けられます。最後の区間は終了なし（〜）です。</p>
+    <div id="bucketEditList" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;"></div>
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 16px;">
+      <button class="btn btn-sm btn-ghost" id="bucketEditResetBtn" style="color: var(--danger);">🔄 デフォルトにリセット</button>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-ghost" id="bucketEditCancelBtn">キャンセル</button>
+        <button class="btn btn-primary" id="bucketEditSaveBtn">💾 保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
   let currentUser = null;
   let currentTab = 'copi';
@@ -1132,7 +1151,10 @@
           <p class="hint">💡 デフォルトは3分超の通常動画のみ取得。ショート（3分以下）・ライブ・ライブアーカイブは自動除外。大量取得（50本以上）はAPI制限に注意</p>
         </div>
         <div class="section">
-          <h3 class="section-title">⏱️ 動画尺別の平均再生数</h3>
+          <h3 class="section-title" style="display: flex; align-items: center; gap: 8px;">
+            <span>⏱️ 動画尺別の平均再生数</span>
+            <button class="btn btn-sm btn-ghost" data-bucket-edit-tab="${tabKey}" title="時間枠を編集" style="font-size: 14px; padding: 2px 8px;">⚙️</button>
+          </h3>
           <p class="hint" style="margin-bottom: 8px;">💡 各動画の最新スナップショットの再生数をもとに集計（通常動画のみ／ショート・ライブ除外）</p>
           <div class="duration-period-controls" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; align-items: center;">
             <span style="font-size: 11px; color: var(--text-muted); margin-right: 4px;">📅期間:</span>
@@ -1150,14 +1172,22 @@
             <button class="btn btn-sm duration-date-apply" data-duration-tab="${tabKey}">適用</button>
             <button class="btn btn-sm btn-ghost duration-date-clear" data-duration-tab="${tabKey}">クリア</button>
           </div>
+          <div class="duration-period-controls" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; align-items: center;">
+            <span style="font-size: 11px; color: var(--text-muted); margin-right: 4px;">☑️尺枠:</span>
+            <button class="btn btn-sm" data-bucket-select-all="${tabKey}">✅ 全選択</button>
+            <button class="btn btn-sm btn-ghost" data-bucket-deselect-all="${tabKey}">⬜ 全解除</button>
+            <span style="font-size: 10px; color: var(--text-faint);">※ チェックを入れると下の動画一覧がその尺枠だけに絞り込まれます</span>
+          </div>
           <div class="duration-stats-container" data-duration-tab="${tabKey}">
-            ${renderDurationStatsHtml(vids, { range: resolveDurationPeriod(durationPeriodState[tabKey]) })}
+            ${renderDurationStatsHtml(vids, { range: resolveDurationPeriod(durationPeriodState[tabKey]), tabKey, selectedBuckets: durationPeriodState[tabKey].selectedBuckets })}
           </div>
         </div>
         <div class="section">
           <h3 class="section-title" data-video-list-title="${tabKey}">🎬 追跡中の動画 ${(() => {
-            const filtered = filterVideosByPeriod(vids, durationPeriodState[tabKey]);
-            const isFiltered = durationPeriodState[tabKey] && durationPeriodState[tabKey].period !== 'all';
+            const filtered = filterVideosByPeriod(vids, durationPeriodState[tabKey], tabKey);
+            const isPeriodFiltered = durationPeriodState[tabKey] && durationPeriodState[tabKey].period !== 'all';
+            const isBucketFiltered = durationPeriodState[tabKey] && durationPeriodState[tabKey].selectedBuckets && durationPeriodState[tabKey].selectedBuckets.size > 0;
+            const isFiltered = isPeriodFiltered || isBucketFiltered;
             return isFiltered ? `(${vids.length}本中 ${filtered.length}本)` : `(${vids.length}本)`;
           })()}</h3>
           <div class="video-list-container" data-video-list-container="${tabKey}">
@@ -1165,9 +1195,9 @@
               if (vids.length === 0) {
                 return `<div class="empty-state"><div class="empty-emoji">🎬</div><div class="empty-text">動画がまだ取得されていません</div></div>`;
               }
-              const filtered = filterVideosByPeriod(vids, durationPeriodState[tabKey]);
+              const filtered = filterVideosByPeriod(vids, durationPeriodState[tabKey], tabKey);
               if (filtered.length === 0) {
-                return `<div class="empty-state" style="padding: 20px;"><div class="empty-text">指定した期間内に該当する動画がありません</div></div>`;
+                return `<div class="empty-state" style="padding: 20px;"><div class="empty-text">指定した条件に該当する動画がありません</div></div>`;
               }
               return renderVideoListHtml(filtered);
             })()}
@@ -1502,11 +1532,12 @@
     attachVideoListHandlers(container);
   }
 
-  // タブごとの期間状態（プリセット or カスタム）
-  // { period: 'all'|'1y'|'6m'|'3m'|'1m'|'custom', from: 'YYYY-MM-DD'|null, to: 'YYYY-MM-DD'|null }
+  // タブごとの期間状態（プリセット or カスタム）と尺バケット選択状態
+  // { period, from, to, selectedBuckets: Set<string> }
+  // selectedBuckets は空＝全表示。要素あり＝そのバケットだけ表示
   const durationPeriodState = {
-    copi: { period: 'all', from: null, to: null },
-    waon: { period: 'all', from: null, to: null }
+    copi: { period: 'all', from: null, to: null, selectedBuckets: new Set() },
+    waon: { period: 'all', from: null, to: null, selectedBuckets: new Set() }
   };
   
   // 期間状態 → 集計用の絶対日付範囲（{fromMs, toMs} or null）
@@ -1535,6 +1566,8 @@
     
     // 期間フィルター
     const range = opts.range || null; // {fromMs, toMs}
+    const tabKey = opts.tabKey || null; // 'copi'|'waon'（チェックボックスID用）
+    const selectedBuckets = opts.selectedBuckets || new Set();
     let filteredOutByPeriod = 0;
     if (range) {
       const before = normalVids.length;
@@ -1547,9 +1580,15 @@
       filteredOutByPeriod = before - normalVids.length;
     }
     
+    // タブごとのバケット設定を取得
+    const tabBuckets = tabKey ? loadDurationBuckets(tabKey) : DURATION_BUCKETS;
+    
     // 各バケットに動画を振り分けて集計
-    const bucketStats = DURATION_BUCKETS.map(b => ({
-      label: b.label,
+    const bucketStats = tabBuckets.map(b => ({
+      key: b.key,
+      label: bucketLabel(b),
+      min: b.min,
+      max: b.max,
       videos: [],
       totalViews: 0,
       avgViews: 0,
@@ -1558,12 +1597,14 @@
       isTotal: false
     }));
     
-    let outOfRangeCount = 0; // 10分未満で集計対象外になった本数
+    let outOfRangeCount = 0; // どのバケットにも該当しなかった本数
     
     normalVids.forEach(v => {
       const sec = isoToSeconds(v.duration);
-      if (sec < 600) { outOfRangeCount++; return; }
-      const bucketIdx = DURATION_BUCKETS.findIndex(b => sec >= b.min && sec < b.max);
+      // 10分未満や、どのバケットにも該当しない動画はカウント外
+      const matchedBucket = findBestBucket(sec, tabBuckets);
+      if (!matchedBucket) { outOfRangeCount++; return; }
+      const bucketIdx = bucketStats.findIndex(b => b.key === matchedBucket.key);
       if (bucketIdx === -1) return;
       const lastSnap = v.snapshots && v.snapshots.length > 0
         ? v.snapshots[v.snapshots.length - 1]
@@ -1583,9 +1624,14 @@
       }
     });
     
-    // 「10:00〜40:00」合計バケット（10:00以上40:00未満の動画＝最後の "40:00〜" を除く全部）
+    // 「○○〜○○」合計バケット（先頭5バケット＝最後の "○○〜" 以外の合計）
+    const firstFive = bucketStats.slice(0, 5);
+    const totalMin = firstFive[0]?.min ?? 600;
+    const totalMaxRaw = firstFive[firstFive.length - 1]?.max ?? 2400;
+    const totalLabel = `${secondsToLabel(totalMin)}〜${secondsToLabel(totalMaxRaw)}`;
     const totalBucket = {
-      label: '10:00〜40:00',
+      key: 'total',
+      label: totalLabel,
       videos: [],
       totalViews: 0,
       avgViews: 0,
@@ -1593,7 +1639,7 @@
       minViews: 0,
       isTotal: true
     };
-    bucketStats.slice(0, 5).forEach(b => {
+    firstFive.forEach(b => {
       totalBucket.videos.push(...b.videos);
       totalBucket.totalViews += b.totalViews;
     });
@@ -1635,8 +1681,15 @@
         : '';
       const labelExtra = isTotal ? `<span style="font-size: 9px; color: var(--accent-teal); margin-left: 4px; font-weight: 800;">📊TOTAL</span>` : '';
       const barColor = isTotal ? 'var(--accent-teal)' : 'var(--accent-pink)';
+      const isChecked = selectedBuckets.has(b.key);
+      const checkboxHtml = tabKey
+        ? `<label style="display: flex; align-items: center; cursor: pointer;" title="この尺枠の動画だけ表示">
+             <input type="checkbox" class="duration-bucket-check" data-bucket-tab="${tabKey}" data-bucket-key="${b.key}" ${isChecked ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px;">
+           </label>`
+        : '';
       return `
-        <div class="duration-row" style="display: grid; grid-template-columns: 110px 1fr 140px; gap: 10px; align-items: center; padding: 8px 6px; border-bottom: 1px dashed var(--section-dashed); ${rowExtraStyle}">
+        <div class="duration-row" style="display: grid; grid-template-columns: 28px 110px 1fr 140px; gap: 10px; align-items: center; padding: 8px 6px; border-bottom: 1px dashed var(--section-dashed); ${rowExtraStyle}">
+          ${checkboxHtml}
           <div style="font-size: 13px; font-weight: 700; color: var(--text);">${b.label}${labelExtra}</div>
           <div style="position: relative; height: 28px; background: var(--dim-bg); border-radius: 6px; overflow: hidden;">
             <div style="position: absolute; left: 0; top: 0; bottom: 0; width: ${barPct}%; background: ${hasData ? barColor : 'transparent'}; border-radius: 6px; transition: width 0.3s;"></div>
@@ -1663,17 +1716,41 @@
   }
   
   // 尺別グラフを再描画（期間状態に応じて）
-  // 動画リストを期間stateでフィルター
-  function filterVideosByPeriod(list, state) {
+  // 動画リストを期間stateとバケット選択でフィルター
+  // tabKey 引数は省略可能、無い場合はDURATION_BUCKETSを使う
+  function filterVideosByPeriod(list, state, tabKey) {
     if (!state) return list;
+    let filtered = list;
+    // 期間フィルター
     const range = resolveDurationPeriod(state);
-    if (!range) return list;
-    return list.filter(v => {
-      const t = new Date(v.publishedAt).getTime();
-      if (range.fromMs !== null && t < range.fromMs) return false;
-      if (range.toMs !== null && t > range.toMs) return false;
-      return true;
-    });
+    if (range) {
+      filtered = filtered.filter(v => {
+        const t = new Date(v.publishedAt).getTime();
+        if (range.fromMs !== null && t < range.fromMs) return false;
+        if (range.toMs !== null && t > range.toMs) return false;
+        return true;
+      });
+    }
+    // バケットフィルター（チェックが1つでもあれば適用、なければスキップ＝全表示）
+    const selected = state.selectedBuckets;
+    if (selected && selected.size > 0) {
+      const tabBuckets = tabKey ? loadDurationBuckets(tabKey) : DURATION_BUCKETS;
+      // 'total' はその他のバケットと等価（先頭5つ）なので展開する
+      const expandedKeys = new Set();
+      selected.forEach(k => {
+        if (k === 'total') ['b0','b1','b2','b3','b4'].forEach(x => expandedKeys.add(x));
+        else expandedKeys.add(k);
+      });
+      filtered = filtered.filter(v => {
+        // 通常動画でなければ除外（尺バケット選択中はショート/ライブも非表示）
+        if ((v.videoKind || 'normal') !== 'normal') return false;
+        const sec = isoToSeconds(v.duration);
+        // 該当バケットを判定（最も狭い区間にマッチ）
+        const bucket = findBestBucket(sec, tabBuckets);
+        return bucket ? expandedKeys.has(bucket.key) : false;
+      });
+    }
+    return filtered;
   }
   
   function rerenderDurationStats(tabKey) {
@@ -1682,9 +1759,39 @@
     const state = durationPeriodState[tabKey];
     const range = resolveDurationPeriod(state);
     const vids = videos.filter(v => v.tabKey === tabKey);
-    container.innerHTML = renderDurationStatsHtml(vids, { range });
+    container.innerHTML = renderDurationStatsHtml(vids, { range, tabKey, selectedBuckets: state.selectedBuckets });
+    // チェックボックスのハンドラを再接続
+    attachBucketCheckboxHandlers(tabKey);
     // 動画一覧も連動してフィルター
     rerenderVideoList(tabKey);
+  }
+  
+  // バケットチェックボックスのイベントハンドラ
+  function attachBucketCheckboxHandlers(tabKey) {
+    const state = durationPeriodState[tabKey];
+    document.querySelectorAll(`.duration-bucket-check[data-bucket-tab="${tabKey}"]`).forEach(cb => {
+      cb.addEventListener('change', () => {
+        const bucketKey = cb.dataset.bucketKey;
+        if (cb.checked) state.selectedBuckets.add(bucketKey);
+        else state.selectedBuckets.delete(bucketKey);
+        rerenderVideoList(tabKey);
+      });
+    });
+    // 全選択/全解除ボタン
+    const selectAllBtn = document.querySelector(`[data-bucket-select-all="${tabKey}"]`);
+    const deselectAllBtn = document.querySelector(`[data-bucket-deselect-all="${tabKey}"]`);
+    if (selectAllBtn) {
+      selectAllBtn.onclick = () => {
+        state.selectedBuckets = new Set(['b0', 'b1', 'b2', 'b3', 'b4', 'b5', 'total']);
+        rerenderDurationStats(tabKey);
+      };
+    }
+    if (deselectAllBtn) {
+      deselectAllBtn.onclick = () => {
+        state.selectedBuckets = new Set();
+        rerenderDurationStats(tabKey);
+      };
+    }
   }
   
   // 動画一覧の再描画（期間フィルター連動）
@@ -1694,10 +1801,12 @@
     if (!container) return;
     const state = durationPeriodState[tabKey];
     const allVids = videos.filter(v => v.tabKey === tabKey);
-    const filtered = filterVideosByPeriod(allVids, state);
+    const filtered = filterVideosByPeriod(allVids, state, tabKey);
     // タイトル更新
     if (titleEl) {
-      const isFiltered = state && state.period !== 'all';
+      const isPeriodFiltered = state && state.period !== 'all';
+      const isBucketFiltered = state && state.selectedBuckets && state.selectedBuckets.size > 0;
+      const isFiltered = isPeriodFiltered || isBucketFiltered;
       titleEl.innerHTML = isFiltered
         ? `🎬 追跡中の動画 (${allVids.length}本中 ${filtered.length}本)`
         : `🎬 追跡中の動画 (${allVids.length}本)`;
@@ -1706,7 +1815,7 @@
     if (filtered.length === 0) {
       container.innerHTML = allVids.length === 0
         ? `<div class="empty-state"><div class="empty-emoji">🎬</div><div class="empty-text">動画がまだ取得されていません</div></div>`
-        : `<div class="empty-state" style="padding: 20px;"><div class="empty-text">指定した期間内に該当する動画がありません</div></div>`;
+        : `<div class="empty-state" style="padding: 20px;"><div class="empty-text">指定した条件に該当する動画がありません</div></div>`;
     } else {
       container.innerHTML = renderVideoListHtml(filtered);
     }
@@ -1792,6 +1901,108 @@
       if (fromInput && state.from) fromInput.value = state.from;
       if (toInput && state.to) toInput.value = state.to;
     }
+    
+    // バケットチェックボックスのハンドラ
+    attachBucketCheckboxHandlers(tabKey);
+    
+    // ⚙️時間枠編集ボタン
+    const editBtn = document.querySelector(`[data-bucket-edit-tab="${tabKey}"]`);
+    if (editBtn) {
+      editBtn.onclick = () => openBucketEditor(tabKey);
+    }
+  }
+  
+  // ===== 時間枠編集モーダル =====
+  let _bucketEditCurrentTab = null;
+  
+  function openBucketEditor(tabKey) {
+    _bucketEditCurrentTab = tabKey;
+    const tabLabel = tabKey === 'copi' ? '🌙 コピプラネット' : '🍁 和音GAMES';
+    document.getElementById('bucketEditModalTab').textContent = '（' + tabLabel + '）';
+    renderBucketEditList(loadDurationBuckets(tabKey));
+    document.getElementById('bucketEditModal').classList.add('show');
+  }
+  
+  function closeBucketEditor() {
+    document.getElementById('bucketEditModal').classList.remove('show');
+    _bucketEditCurrentTab = null;
+  }
+  
+  function renderBucketEditList(buckets) {
+    const list = document.getElementById('bucketEditList');
+    list.innerHTML = buckets.map((b, i) => {
+      const minM = Math.floor(b.min / 60);
+      const minS = b.min % 60;
+      const isLast = (i === buckets.length - 1);
+      const maxM = b.max === Infinity ? '' : Math.floor(b.max / 60);
+      const maxS = b.max === Infinity ? '' : (b.max % 60);
+      return `
+        <div class="bucket-edit-row" data-row-idx="${i}" style="display: grid; grid-template-columns: 30px 1fr auto 1fr; gap: 6px; align-items: center; padding: 8px; background: var(--dim-bg); border-radius: 8px;">
+          <div style="font-weight: 800; color: var(--text-muted);">[${i + 1}]</div>
+          <div style="display: flex; align-items: center; gap: 4px;">
+            <input type="number" min="0" max="99" class="input-field bucket-min-m" value="${minM}" style="width: 50px; padding: 4px;">
+            <span>:</span>
+            <input type="number" min="0" max="59" class="input-field bucket-min-s" value="${minS}" style="width: 50px; padding: 4px;">
+            <span style="font-size: 11px; color: var(--text-muted);">分:秒</span>
+          </div>
+          <div style="font-weight: 800; color: var(--text-muted);">〜</div>
+          <div style="display: flex; align-items: center; gap: 4px;">
+            ${isLast 
+              ? `<span style="font-size: 12px; color: var(--text-faint); font-style: italic;">（終了なし）</span>` 
+              : `<input type="number" min="0" max="99" class="input-field bucket-max-m" value="${maxM}" style="width: 50px; padding: 4px;">
+                 <span>:</span>
+                 <input type="number" min="0" max="59" class="input-field bucket-max-s" value="${maxS}" style="width: 50px; padding: 4px;">
+                 <span style="font-size: 11px; color: var(--text-muted);">分:秒</span>`
+            }
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+  
+  // 編集UIから現在の値を読み取って配列にする
+  function readBucketEditValues() {
+    const rows = document.querySelectorAll('.bucket-edit-row');
+    const result = [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const isLast = (i === rows.length - 1);
+      const minM = parseInt(row.querySelector('.bucket-min-m').value) || 0;
+      const minS = parseInt(row.querySelector('.bucket-min-s').value) || 0;
+      const min = minM * 60 + minS;
+      let max;
+      if (isLast) {
+        max = Infinity;
+      } else {
+        const maxM = parseInt(row.querySelector('.bucket-max-m').value) || 0;
+        const maxS = parseInt(row.querySelector('.bucket-max-s').value) || 0;
+        // 終了は「次の秒の手前まで」なので+1する（例: 14:59 → 15:00）
+        max = maxM * 60 + maxS + 1;
+      }
+      if (max <= min) {
+        return { error: `区間[${i + 1}]: 開始(${secondsToLabel(min)})が終了より大きい、もしくは等しいです` };
+      }
+      result.push({ key: 'b' + i, min, max });
+    }
+    return { buckets: result };
+  }
+  
+  function saveBucketEdit() {
+    const tabKey = _bucketEditCurrentTab;
+    if (!tabKey) return;
+    const r = readBucketEditValues();
+    if (r.error) { alert('⚠️ ' + r.error); return; }
+    saveDurationBuckets(tabKey, r.buckets);
+    closeBucketEditor();
+    // 再描画（タブ全体）
+    if (currentTab === tabKey) {
+      switchTab(tabKey);
+    }
+  }
+  
+  function resetBucketEdit() {
+    if (!confirm('時間枠をデフォルト値（10/15/20/25/30/40）にリセットしますか？')) return;
+    renderBucketEditList(DEFAULT_DURATION_BUCKETS.map(b => ({ ...b })));
   }
   
   function renderVideoListHtml(list) {
@@ -2017,6 +2228,14 @@
       if (detailChart) { detailChart.destroy(); detailChart = null; }
       if (analyticsChart) { analyticsChart.destroy(); analyticsChart = null; }
     }
+  });
+  
+  // ==== 時間枠編集モーダル ====
+  document.getElementById('bucketEditCancelBtn').addEventListener('click', closeBucketEditor);
+  document.getElementById('bucketEditSaveBtn').addEventListener('click', saveBucketEdit);
+  document.getElementById('bucketEditResetBtn').addEventListener('click', resetBucketEdit);
+  document.getElementById('bucketEditModal').addEventListener('click', (e) => {
+    if (e.target.id === 'bucketEditModal') closeBucketEditor();
   });
 
   // ==== テーマ切替 ====
@@ -3064,20 +3283,78 @@
   
   // 動画尺の区切り（秒）と表示ラベル
   // 10:00未満は集計対象外（短すぎる動画は別ジャンル扱い）
-  const DURATION_BUCKETS = [
-    { min: 600,  max: 900,    label: '10:00〜14:59' },
-    { min: 900,  max: 1200,   label: '15:00〜19:59' },
-    { min: 1200, max: 1500,   label: '20:00〜24:59' },
-    { min: 1500, max: 1800,   label: '25:00〜29:59' },
-    { min: 1800, max: 2400,   label: '30:00〜39:59' },
-    { min: 2400, max: Infinity, label: '40:00〜' }
+  // デフォルト値（リセット時に使用）
+  const DEFAULT_DURATION_BUCKETS = [
+    { key: 'b0', min: 600,  max: 900   },
+    { key: 'b1', min: 900,  max: 1200  },
+    { key: 'b2', min: 1200, max: 1500  },
+    { key: 'b3', min: 1500, max: 1800  },
+    { key: 'b4', min: 1800, max: 2400  },
+    { key: 'b5', min: 2400, max: Infinity }
   ];
   
-  function bucketForSeconds(sec) {
-    for (const b of DURATION_BUCKETS) {
-      if (sec >= b.min && sec < b.max) return b;
+  // 秒 → "M:SS" のラベル形式
+  function secondsToLabel(sec) {
+    if (sec === Infinity) return '∞';
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  }
+  
+  // バケットの表示ラベルを動的に生成
+  function bucketLabel(b) {
+    if (b.max === Infinity) {
+      return `${secondsToLabel(b.min)}〜`;
     }
-    return null;
+    return `${secondsToLabel(b.min)}〜${secondsToLabel(b.max - 1)}`;
+  }
+  
+  // タブごとのバケット設定（localStorage連携）
+  // 形式: [{ key, min, max }, ...] の配列。max=Infinityはnullで保存。
+  function loadDurationBuckets(tabKey) {
+    try {
+      const raw = localStorage.getItem('analyzer_duration_buckets_' + tabKey);
+      if (!raw) return DEFAULT_DURATION_BUCKETS.map(b => ({ ...b }));
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed) || parsed.length !== 6) {
+        return DEFAULT_DURATION_BUCKETS.map(b => ({ ...b }));
+      }
+      return parsed.map((b, i) => ({
+        key: 'b' + i,
+        min: typeof b.min === 'number' ? b.min : DEFAULT_DURATION_BUCKETS[i].min,
+        max: (b.max === null || b.max === undefined) ? Infinity : b.max
+      }));
+    } catch (e) {
+      return DEFAULT_DURATION_BUCKETS.map(b => ({ ...b }));
+    }
+  }
+  function saveDurationBuckets(tabKey, buckets) {
+    const serializable = buckets.map(b => ({
+      min: b.min,
+      max: b.max === Infinity ? null : b.max
+    }));
+    localStorage.setItem('analyzer_duration_buckets_' + tabKey, JSON.stringify(serializable));
+  }
+  
+  // 互換性のための DURATION_BUCKETS（過去コード用、現在のcopi設定をそのまま使う）
+  // ※ filterVideosByPeriod内のバケット振り分けでは tabKey の設定を直接使うように修正済み
+  let DURATION_BUCKETS = loadDurationBuckets('copi');
+  
+  // 動画の尺を最も狭くマッチするバケットに振り分ける（区間重なり対応）
+  function findBestBucket(sec, buckets) {
+    const matches = buckets.filter(b => sec >= b.min && sec < b.max);
+    if (matches.length === 0) return null;
+    if (matches.length === 1) return matches[0];
+    // 複数マッチした場合：最も狭い区間（max-min が小さい）を選ぶ
+    return matches.reduce((narrowest, b) => {
+      const narrowSpan = narrowest.max === Infinity ? Infinity : (narrowest.max - narrowest.min);
+      const bSpan = b.max === Infinity ? Infinity : (b.max - b.min);
+      return bSpan < narrowSpan ? b : narrowest;
+    });
+  }
+  
+  function bucketForSeconds(sec, buckets) {
+    return findBestBucket(sec, buckets || DURATION_BUCKETS);
   }
   
   function formatElapsed(ms) {
