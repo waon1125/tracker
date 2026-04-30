@@ -867,6 +867,11 @@
           <p class="hint">💡 デフォルトは3分超の通常動画のみ取得。ショート（3分以下）・ライブ・ライブアーカイブは自動除外。大量取得（50本以上）はAPI制限に注意</p>
         </div>
         <div class="section">
+          <h3 class="section-title">⏱️ 動画尺別の平均再生数</h3>
+          <p class="hint" style="margin-bottom: 8px;">💡 各動画の最新スナップショットの再生数をもとに集計（通常動画のみ／ショート・ライブ除外）</p>
+          ${renderDurationStatsHtml(vids)}
+        </div>
+        <div class="section">
           <h3 class="section-title">🎬 追跡中の動画 (${vids.length}本)</h3>
           ${vids.length === 0 
             ? `<div class="empty-state"><div class="empty-emoji">🎬</div><div class="empty-text">動画がまだ取得されていません</div></div>`
@@ -1200,6 +1205,89 @@
     attachVideoListHandlers(container);
   }
 
+  // ==== 尺別の平均再生数集計 ====
+  function renderDurationStatsHtml(list) {
+    // 通常動画のみ（ショート・ライブ・ライブアーカイブ除外）
+    const normalVids = list.filter(v => (v.videoKind || 'normal') === 'normal');
+    
+    // 各バケットに動画を振り分けて集計
+    const bucketStats = DURATION_BUCKETS.map(b => ({
+      label: b.label,
+      videos: [],
+      totalViews: 0,
+      avgViews: 0,
+      maxViews: 0,
+      minViews: 0
+    }));
+    
+    let outOfRangeCount = 0; // 10分未満で集計対象外になった本数
+    
+    normalVids.forEach(v => {
+      const sec = isoToSeconds(v.duration);
+      if (sec < 600) { outOfRangeCount++; return; }
+      const bucketIdx = DURATION_BUCKETS.findIndex(b => sec >= b.min && sec < b.max);
+      if (bucketIdx === -1) return;
+      const lastSnap = v.snapshots && v.snapshots.length > 0
+        ? v.snapshots[v.snapshots.length - 1]
+        : null;
+      if (!lastSnap) return;
+      const views = lastSnap.views || 0;
+      bucketStats[bucketIdx].videos.push({ title: v.title, views, duration: v.duration });
+      bucketStats[bucketIdx].totalViews += views;
+    });
+    
+    // 平均・最大・最小を計算
+    bucketStats.forEach(b => {
+      if (b.videos.length > 0) {
+        b.avgViews = Math.round(b.totalViews / b.videos.length);
+        b.maxViews = Math.max(...b.videos.map(v => v.views));
+        b.minViews = Math.min(...b.videos.map(v => v.views));
+      }
+    });
+    
+    // 全体での最大平均（バーグラフのスケール用）
+    const maxAvg = Math.max(...bucketStats.map(b => b.avgViews), 1);
+    const totalCounted = bucketStats.reduce((sum, b) => sum + b.videos.length, 0);
+    
+    if (totalCounted === 0) {
+      return `<div class="empty-state" style="padding: 20px;">
+        <div class="empty-text">10分以上の通常動画がまだありません</div>
+      </div>`;
+    }
+    
+    const rows = bucketStats.map(b => {
+      const hasData = b.videos.length > 0;
+      const barPct = hasData ? (b.avgViews / maxAvg * 100) : 0;
+      const avgText = hasData ? b.avgViews.toLocaleString() : '—';
+      const countText = hasData ? `${b.videos.length}本` : '0本';
+      const rangeText = hasData
+        ? `min ${b.minViews.toLocaleString()} / max ${b.maxViews.toLocaleString()}`
+        : '';
+      return `
+        <div class="duration-row" style="display: grid; grid-template-columns: 110px 1fr 110px; gap: 10px; align-items: center; padding: 8px 6px; border-bottom: 1px dashed var(--section-dashed);">
+          <div style="font-size: 13px; font-weight: 700; color: var(--text);">${b.label}</div>
+          <div style="position: relative; height: 28px; background: var(--dim-bg); border-radius: 6px; overflow: hidden;">
+            <div style="position: absolute; left: 0; top: 0; bottom: 0; width: ${barPct}%; background: ${hasData ? 'var(--accent-pink)' : 'transparent'}; border-radius: 6px; transition: width 0.3s;"></div>
+            <div style="position: absolute; left: 8px; top: 0; bottom: 0; display: flex; align-items: center; font-size: 12px; font-weight: 700; color: ${hasData && barPct > 30 ? 'var(--on-accent)' : 'var(--text)'}; text-shadow: ${hasData && barPct > 30 ? '0 1px 2px rgba(0,0,0,0.3)' : 'none'}; white-space: nowrap;">${avgText}${hasData ? ' 回（平均）' : ''}</div>
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted); text-align: right;">
+            <div style="font-weight: 700; color: var(--text);">${countText}</div>
+            ${rangeText ? `<div style="font-size: 10px;">${rangeText}</div>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+    
+    const noteText = outOfRangeCount > 0
+      ? `<div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">💡 集計対象 ${totalCounted}本（10分未満の動画${outOfRangeCount}本は除外）</div>`
+      : `<div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">💡 集計対象 ${totalCounted}本</div>`;
+    
+    return `<div style="background: var(--card-bg); border: 2px solid var(--card-border); border-radius: 10px; padding: 12px;">
+      ${rows}
+      ${noteText}
+    </div>`;
+  }
+  
   function renderVideoListHtml(list) {
     const sorted = [...list].sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
     return '<div class="video-list">' + sorted.map(v => {
@@ -2294,6 +2382,35 @@
     const s = parseInt(m[3] || 0);
     if (h > 0) return `${h}:${String(min).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
     return `${min}:${String(s).padStart(2,'0')}`;
+  }
+  
+  // ISO 8601 duration → 秒
+  function isoToSeconds(iso) {
+    if (!iso) return 0;
+    const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if (!m) return 0;
+    const h = parseInt(m[1] || 0);
+    const min = parseInt(m[2] || 0);
+    const s = parseInt(m[3] || 0);
+    return h * 3600 + min * 60 + s;
+  }
+  
+  // 動画尺の区切り（秒）と表示ラベル
+  // 10:00未満は集計対象外（短すぎる動画は別ジャンル扱い）
+  const DURATION_BUCKETS = [
+    { min: 600,  max: 900,    label: '10:00〜14:59' },
+    { min: 900,  max: 1200,   label: '15:00〜19:59' },
+    { min: 1200, max: 1500,   label: '20:00〜24:59' },
+    { min: 1500, max: 1800,   label: '25:00〜29:59' },
+    { min: 1800, max: 2400,   label: '30:00〜39:59' },
+    { min: 2400, max: Infinity, label: '40:00〜' }
+  ];
+  
+  function bucketForSeconds(sec) {
+    for (const b of DURATION_BUCKETS) {
+      if (sec >= b.min && sec < b.max) return b;
+    }
+    return null;
   }
   
   function formatElapsed(ms) {
