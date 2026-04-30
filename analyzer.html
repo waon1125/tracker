@@ -297,8 +297,9 @@
         </div>
         <button id="pruneSnapshotsBtn" class="btn btn-sm btn-primary">📸 古いスナップショットを削除</button>
         <div style="font-size: 10px; color: var(--text-muted); margin-top: 6px;">
-          💡 重要ポイント（1時間後/1日後/1週間後/1ヶ月後）と最新スナップショット以外を削除します。<br>
-          💡 スナップショット取得ボタンを押した時も同じ間引き処理が自動で実行されます。
+          💡 通常スナップショット：重要ポイント（1時間後/1日後/1週間後/1ヶ月後）と最新以外を削除します。<br>
+          💡 詳細データ（維持率・視聴時間など）：各動画の最新1件以外を削除します。<br>
+          💡 スナップショット取得ボタンを押した時も、同じ間引き処理が自動で実行されます。
         </div>
       </div>
     </div>
@@ -356,6 +357,25 @@
   function applyTheme() {
     document.documentElement.setAttribute('data-theme', currentTheme);
     document.documentElement.setAttribute('data-color', currentColor);
+    applyChartTheme();
+  }
+  
+  // Chart.js のデフォルト色をテーマに応じて切り替え
+  function applyChartTheme() {
+    if (typeof Chart === 'undefined') return;
+    const isDark = currentTheme === 'dark';
+    Chart.defaults.color = isDark ? '#e8e8ea' : '#2d2d2d';
+    Chart.defaults.borderColor = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)';
+    if (Chart.defaults.scale) {
+      Chart.defaults.scale.grid = Chart.defaults.scale.grid || {};
+      Chart.defaults.scale.grid.color = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+      Chart.defaults.scale.ticks = Chart.defaults.scale.ticks || {};
+      Chart.defaults.scale.ticks.color = isDark ? '#cfcfd8' : '#2d2d2d';
+    }
+    // 既存のチャートを再描画して反映
+    if (typeof renderAll === 'function') {
+      try { renderAll(); } catch (e) { /* 初期化前は無視 */ }
+    }
   }
   applyTheme();
 
@@ -753,25 +773,38 @@
   }
 
   // スナップショット間引き：targetOffset付き + 各動画の最新1本だけ残す
-  // 戻り値: { totalBefore, totalAfter, removedCount }
+  // analyticsSnapshots も最新1件だけに圧縮
+  // 戻り値: { totalBefore, totalAfter, removedCount, analyticsRemoved }
   function pruneSnapshotsAll() {
-    let totalBefore = 0, totalAfter = 0;
+    let totalBefore = 0, totalAfter = 0, analyticsRemoved = 0;
     videos.forEach(v => {
       const snaps = v.snapshots || [];
       totalBefore += snaps.length;
-      if (snaps.length === 0) return;
-      // 時系列順にソート（古い順）
-      const sorted = [...snaps].sort((a, b) => new Date(a.at) - new Date(b.at));
-      const latestAt = sorted[sorted.length - 1].at;
-      // targetOffset付き、または最新スナップショットのみ残す
-      const kept = sorted.filter(s => s.targetOffset || s.at === latestAt);
-      v.snapshots = kept;
-      totalAfter += kept.length;
+      if (snaps.length > 0) {
+        // 時系列順にソート（古い順）
+        const sorted = [...snaps].sort((a, b) => new Date(a.at) - new Date(b.at));
+        const latestAt = sorted[sorted.length - 1].at;
+        // targetOffset付き、または最新スナップショットのみ残す
+        const kept = sorted.filter(s => s.targetOffset || s.at === latestAt);
+        v.snapshots = kept;
+        totalAfter += kept.length;
+      }
+      // analyticsSnapshots は最新1件だけ残す
+      const aSnaps = v.analyticsSnapshots || [];
+      if (aSnaps.length > 1) {
+        const sortedA = [...aSnaps].sort((a, b) => new Date(a.at) - new Date(b.at));
+        const latest = sortedA[sortedA.length - 1];
+        v.analyticsSnapshots = [latest];
+        // v.analytics も最新に揃える（互換用）
+        v.analytics = { ...latest, fetchedAt: latest.at };
+        analyticsRemoved += (aSnaps.length - 1);
+      }
     });
     return {
       totalBefore,
       totalAfter,
-      removedCount: totalBefore - totalAfter
+      removedCount: totalBefore - totalAfter,
+      analyticsRemoved
     };
   }
 
@@ -1001,9 +1034,9 @@
               console.log(`[一斉取得] ${i+1}/${vids.length}: ${v.title}`);
               const data = await fetchAnalytics(v.videoId, v.publishedAt);
               if (data) {
-                if (!v.analyticsSnapshots) v.analyticsSnapshots = [];
                 const snapshot = { ...data, at: new Date().toISOString() };
-                v.analyticsSnapshots.push(snapshot);
+                // analyticsSnapshots は最新1件のみ保持（容量削減のため）
+                v.analyticsSnapshots = [snapshot];
                 v.analytics = { ...snapshot, fetchedAt: snapshot.at };
                 ok++;
               } else {
@@ -1363,19 +1396,22 @@
       const barPct = hasData ? (b.avgViews / maxAvg * 100) : 0;
       const avgText = hasData ? b.avgViews.toLocaleString() : '—';
       const countText = hasData ? `${b.videos.length}本` : '0本';
-      const rangeText = hasData
-        ? `min ${b.minViews.toLocaleString()} / max ${b.maxViews.toLocaleString()}`
+      const minMaxHtml = hasData
+        ? `<div style="font-size: 10px; line-height: 1.5; white-space: nowrap;">
+             <div><span style="color: var(--accent-teal); font-weight: 800;">min</span> <span style="color: var(--text);">${b.minViews.toLocaleString()}</span></div>
+             <div><span style="color: var(--accent-pink); font-weight: 800;">max</span> <span style="color: var(--text);">${b.maxViews.toLocaleString()}</span></div>
+           </div>`
         : '';
       return `
-        <div class="duration-row" style="display: grid; grid-template-columns: 110px 1fr 110px; gap: 10px; align-items: center; padding: 8px 6px; border-bottom: 1px dashed var(--section-dashed);">
+        <div class="duration-row" style="display: grid; grid-template-columns: 110px 1fr 140px; gap: 10px; align-items: center; padding: 8px 6px; border-bottom: 1px dashed var(--section-dashed);">
           <div style="font-size: 13px; font-weight: 700; color: var(--text);">${b.label}</div>
           <div style="position: relative; height: 28px; background: var(--dim-bg); border-radius: 6px; overflow: hidden;">
             <div style="position: absolute; left: 0; top: 0; bottom: 0; width: ${barPct}%; background: ${hasData ? 'var(--accent-pink)' : 'transparent'}; border-radius: 6px; transition: width 0.3s;"></div>
             <div style="position: absolute; left: 8px; top: 0; bottom: 0; display: flex; align-items: center; font-size: 12px; font-weight: 700; color: ${hasData && barPct > 30 ? 'var(--on-accent)' : 'var(--text)'}; text-shadow: ${hasData && barPct > 30 ? '0 1px 2px rgba(0,0,0,0.3)' : 'none'}; white-space: nowrap;">${avgText}${hasData ? ' 回（平均）' : ''}</div>
           </div>
           <div style="font-size: 11px; color: var(--text-muted); text-align: right;">
-            <div style="font-weight: 700; color: var(--text);">${countText}</div>
-            ${rangeText ? `<div style="font-size: 10px;">${rangeText}</div>` : ''}
+            <div style="font-weight: 700; color: var(--text); margin-bottom: 2px;">${countText}</div>
+            ${minMaxHtml}
           </div>
         </div>
       `;
@@ -1554,12 +1590,6 @@
       <!-- 詳細データ（OAuth連携時のみ） -->
       <div id="analyticsSection" style="margin-bottom: 12px;"></div>
       
-      <!-- 詳細データ時系列グラフ -->
-      <div id="analyticsChartWrap" style="margin-bottom: 12px;">
-        <h3 style="margin: 12px 0 6px; font-size: 13px;">📈 詳細データ時系列</h3>
-        <div class="chart-wrap" id="analyticsChartContainer"></div>
-      </div>
-      
       <div class="chart-wrap">
         <canvas id="detailChartCanvas"></canvas>
       </div>
@@ -1599,17 +1629,6 @@
     
     // 自分のチャンネルの動画かつOAuth認証済みなら詳細データセクション表示
     renderAnalyticsSection(v);
-    // Analytics時系列グラフ（データがあれば）
-    const isMine = (v.tabKey === 'copi' || v.tabKey === 'waon');
-    const chartWrap = document.getElementById('analyticsChartWrap');
-    if (chartWrap) {
-      if (isMine && v.analyticsSnapshots && v.analyticsSnapshots.length >= 2) {
-        chartWrap.style.display = 'block';
-        renderAnalyticsTimeSeriesChart(v);
-      } else {
-        chartWrap.style.display = 'none';
-      }
-    }
     
     // スナップショット個別削除ハンドラー
     document.querySelectorAll('[data-del-snapshot]').forEach(btn => {
@@ -1773,13 +1792,17 @@
       });
       // 間引き可能なスナップショット本数を計算
       let totalSnaps = 0, willKeep = 0;
+      let analyticsExtra = 0;
       videos.forEach(v => {
         const snaps = v.snapshots || [];
         totalSnaps += snaps.length;
-        if (snaps.length === 0) return;
-        const sorted = [...snaps].sort((a, b) => new Date(a.at) - new Date(b.at));
-        const latestAt = sorted[sorted.length - 1].at;
-        willKeep += sorted.filter(s => s.targetOffset || s.at === latestAt).length;
+        if (snaps.length > 0) {
+          const sorted = [...snaps].sort((a, b) => new Date(a.at) - new Date(b.at));
+          const latestAt = sorted[sorted.length - 1].at;
+          willKeep += sorted.filter(s => s.targetOffset || s.at === latestAt).length;
+        }
+        const aSnaps = v.analyticsSnapshots || [];
+        if (aSnaps.length > 1) analyticsExtra += (aSnaps.length - 1);
       });
       const prunableSnaps = totalSnaps - willKeep;
       
@@ -1787,7 +1810,8 @@
       let html = `${icon} 現在のサイズ: ${(bytes/1024).toFixed(1)} KB / 1024 KB (${pct}%)`;
       if (removable > 0) html += `<br>　削除可能: ${(removable/1024).toFixed(1)} KB（古い概要欄・タグ）`;
       if (prunableSnaps > 0) html += `<br>　間引き可能: ${prunableSnaps}本のスナップショット`;
-      if (removable === 0 && prunableSnaps === 0) html += `<br>　削除可能データなし`;
+      if (analyticsExtra > 0) html += `<br>　間引き可能: ${analyticsExtra}件の詳細データ履歴`;
+      if (removable === 0 && prunableSnaps === 0 && analyticsExtra === 0) html += `<br>　削除可能データなし`;
       el.innerHTML = html;
     } catch (e) {
       el.textContent = 'サイズ計算エラー';
@@ -1799,31 +1823,37 @@
     const sizeBefore = new Blob([JSON.stringify({ channels, videos })]).size;
     // 削除予定本数の事前計算
     let totalSnaps = 0, willKeep = 0;
+    let analyticsExtra = 0;
     videos.forEach(v => {
       const snaps = v.snapshots || [];
       totalSnaps += snaps.length;
-      if (snaps.length === 0) return;
-      const sorted = [...snaps].sort((a, b) => new Date(a.at) - new Date(b.at));
-      const latestAt = sorted[sorted.length - 1].at;
-      willKeep += sorted.filter(s => s.targetOffset || s.at === latestAt).length;
+      if (snaps.length > 0) {
+        const sorted = [...snaps].sort((a, b) => new Date(a.at) - new Date(b.at));
+        const latestAt = sorted[sorted.length - 1].at;
+        willKeep += sorted.filter(s => s.targetOffset || s.at === latestAt).length;
+      }
+      const aSnaps = v.analyticsSnapshots || [];
+      if (aSnaps.length > 1) analyticsExtra += (aSnaps.length - 1);
     });
     const willDelete = totalSnaps - willKeep;
     
-    if (willDelete === 0) {
+    if (willDelete === 0 && analyticsExtra === 0) {
       alert('削除対象のスナップショットはありませんでした');
       return;
     }
     
-    if (!confirm(
-      `スナップショットを間引きます:\n\n` +
-      `📸 全${totalSnaps}本のスナップショット\n` +
-      `  ✅ 残す: ${willKeep}本（重要ポイント + 各動画の最新1本）\n` +
-      `  ❌ 削除: ${willDelete}本\n\n` +
-      `※ 削除後はFirestoreに即時保存されます。\n` +
-      `※ 元には戻せません。実行しますか？`
-    )) {
-      return;
+    let confirmMsg = `スナップショットを間引きます:\n\n`;
+    if (totalSnaps > 0) {
+      confirmMsg += `📸 全${totalSnaps}本の通常スナップショット\n`;
+      confirmMsg += `  ✅ 残す: ${willKeep}本（重要ポイント + 各動画の最新1本）\n`;
+      confirmMsg += `  ❌ 削除: ${willDelete}本\n`;
     }
+    if (analyticsExtra > 0) {
+      confirmMsg += `\n📊 詳細データ（Analytics）の古い履歴: ${analyticsExtra}件を削除\n  ※ 各動画の最新1件のみ残ります\n`;
+    }
+    confirmMsg += `\n※ 削除後はFirestoreに即時保存されます。\n※ 元には戻せません。実行しますか？`;
+    
+    if (!confirm(confirmMsg)) return;
     
     try {
       const result = pruneSnapshotsAll();
@@ -1831,7 +1861,9 @@
       const sizeAfter = new Blob([JSON.stringify({ channels, videos })]).size;
       const reducedBytes = sizeBefore - sizeAfter;
       alert(
-        `✅ ${result.removedCount}本のスナップショットを削除しました\n` +
+        `✅ ${result.removedCount}本のスナップショット` +
+        (result.analyticsRemoved > 0 ? ` + ${result.analyticsRemoved}件の詳細データ履歴` : '') +
+        `を削除しました\n` +
         `📦 ${(sizeBefore/1024).toFixed(1)} KB → ${(sizeAfter/1024).toFixed(1)} KB\n` +
         `📉 ${(reducedBytes/1024).toFixed(1)} KB 削減`
       );
@@ -2075,50 +2107,7 @@
     };
   }
 
-  // Analytics時系列グラフ（維持率・CTRの推移）
-  let analyticsChart = null;
-  function renderAnalyticsTimeSeriesChart(v) {
-    const container = document.getElementById('analyticsChartContainer');
-    if (!container) return;
-    const snaps = (v.analyticsSnapshots || []).slice().sort((a, b) => new Date(a.at) - new Date(b.at));
-    if (snaps.length < 2) {
-      container.innerHTML = `
-        <div style="padding: 10px; color: var(--text-faint); font-size: 11px; text-align: center;">
-          💡 詳細データが2回以上取得されると、ここに時系列グラフが表示されます
-        </div>
-      `;
-      return;
-    }
-    container.innerHTML = '<canvas id="analyticsChartCanvas"></canvas>';
-    const ctx = document.getElementById('analyticsChartCanvas').getContext('2d');
-    if (analyticsChart) analyticsChart.destroy();
-    analyticsChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: snaps.map(s => {
-          const d = new Date(s.at);
-          return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
-        }),
-        datasets: [
-          { label: '平均視聴率 (%)', data: snaps.map(s => (s.avgPercentage || 0).toFixed(1)), 
-            borderColor: '#ff6b9d', backgroundColor: '#ff6b9d', borderWidth: 3, tension: 0.3, yAxisID: 'y' },
-          { label: '平均視聴時間 (秒)', data: snaps.map(s => Math.round(s.avgDuration || 0)), 
-            borderColor: '#4ecdc4', backgroundColor: '#4ecdc4', borderWidth: 2, tension: 0.3, yAxisID: 'y1' },
-          { label: '登録者増減', data: snaps.map(s => (s.subGained || 0) - (s.subLost || 0)), 
-            borderColor: '#ffd93d', backgroundColor: '#ffd93d', borderWidth: 2, tension: 0.3, yAxisID: 'y2' },
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { position: 'top' } },
-        scales: {
-          y: { position: 'left', title: { display: true, text: '視聴率 (%)' }, beginAtZero: true, max: 100 },
-          y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '視聴時間 (秒)' }, beginAtZero: true },
-          y2: { display: false }
-        }
-      }
-    });
-  }
+  // Analytics時系列グラフは削除済み（最新データのみ保持する方針に変更）
 
   function renderAnalyticsSection(v) {
     const section = document.getElementById('analyticsSection');
@@ -2176,17 +2165,14 @@
         `;
         return;
       }
-      // スナップショット配列に追加（時系列蓄積）
-      if (!v.analyticsSnapshots) v.analyticsSnapshots = [];
+      // 最新1件のみ保持（容量削減のため、時系列蓄積は廃止）
       const snapshot = { ...data, at: new Date().toISOString() };
-      v.analyticsSnapshots.push(snapshot);
+      v.analyticsSnapshots = [snapshot];
       // 最新のもの（互換用）
       v.analytics = { ...snapshot, fetchedAt: snapshot.at };
       await saveFirestoreData();
       section.innerHTML = renderAnalyticsData(v.analytics, v);
       section.querySelector('[data-refetch-analytics]')?.addEventListener('click', () => fetchAndShowAnalytics(v));
-      // モーダル内のグラフも更新
-      renderAnalyticsTimeSeriesChart(v);
     } catch (err) {
       section.innerHTML = `
         <div style="padding: 10px; background: var(--danger-bg); border: 2px solid var(--danger); border-radius: 8px; font-size: 12px; color: var(--danger);">
