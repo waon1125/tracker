@@ -36,16 +36,12 @@ const DOC_ID = 'analyzer-data';
 const COLLECTION = 'analyzer';
 
 // 取得タイミング定義
+// 注：1h は自動取得しない（GitHub Actions の遅延を考慮、トラッカーの手入力データを使用）
 const OFFSET_TARGETS = [
-  { label: '1h', ms: 60 * 60 * 1000 },
-  { label: '1d', ms: 24 * 60 * 60 * 1000 },
-  { label: '1w', ms: 7 * 24 * 60 * 60 * 1000 },
-  { label: '1m', ms: 30 * 24 * 60 * 60 * 1000 },
+  { label: '1d', ms: 24 * 60 * 60 * 1000,        toleranceMs: 3 * 60 * 60 * 1000 },  // 1日後 ±3時間
+  { label: '1w', ms: 7 * 24 * 60 * 60 * 1000,    toleranceMs: 6 * 60 * 60 * 1000 },  // 1週間後 ±6時間
+  { label: '1m', ms: 30 * 24 * 60 * 60 * 1000,   toleranceMs: 6 * 60 * 60 * 1000 },  // 1ヶ月後 ±6時間
 ];
-
-// 取得タイミングの許容範囲：目標時刻を過ぎてから30分以内のみ取得
-// （GitHub Actionsのcron誤差を考慮した幅）
-const TOLERANCE_MS = 30 * 60 * 1000;
 
 // 対象動画の条件：投稿から31日以内の動画のみ
 const MAX_AGE_MS = 31 * 24 * 60 * 60 * 1000;
@@ -274,10 +270,10 @@ async function discoverNewVideos(channels, videos, accessToken) {
       title: detail.snippet.title,
       channelId: detail.snippet.channelId,
       channelTitle: detail.snippet.channelTitle,
+      tabKey: candidate.channelKey, // 'copi' or 'waon' （アナライザーで動画一覧に表示するために必須）
       publishedAt: detail.snippet.publishedAt,
       thumbnailUrl: detail.snippet.thumbnails?.high?.url || detail.snippet.thumbnails?.default?.url || '',
-      tags: detail.snippet.tags || [],
-      description: detail.snippet.description || '',
+      // description / tags は容量削減のため保存しない（2026-04-30〜）
       duration: detail.contentDetails?.duration || '',
       videoKind: judgment.kind,
       snapshots: [],
@@ -368,9 +364,9 @@ async function main() {
       // 目標時刻にまだ達していない → スキップ
       if (delta < 0) continue;
       
-      // 目標時刻から許容範囲（30分）を超えて経過 → スキップ
-      // （過去動画の取り逃し分は取得しない、タイミング外のデータは意味がない）
-      if (delta > TOLERANCE_MS) continue;
+      // 目標時刻から許容範囲を超えて経過 → スキップ
+      // （オフセットごとに異なる許容範囲、GitHub Actions cron 遅延対策）
+      if (delta > offset.toleranceMs) continue;
 
       console.log(`  🎯 [${offset.label}] 取得対象: ${video.title?.slice(0, 40)}`);
 
