@@ -3047,7 +3047,7 @@
       
       // 内容構築
       const thumbHtml = d.thumbnailUrl
-        ? `<img src="${d.thumbnailUrl}" alt="" style="width: 142px; height: 80px; object-fit: cover; border-radius: 4px; display: block; margin-bottom: 6px; background: #000;" loading="lazy">`
+        ? `<img src="${d.thumbnailUrl}" alt="" style="width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: 4px; display: block; margin-bottom: 6px; background: #000;" loading="lazy">`
         : '';
       const channelHtml = d.channelTitle
         ? `<div style="font-size: 10px; color: #ffd93d; font-weight: 800; margin-bottom: 2px;">[${escapeHtml(d.channelTitle)}]</div>`
