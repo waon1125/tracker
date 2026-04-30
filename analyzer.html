@@ -274,6 +274,44 @@
     </div>
     
     <div style="margin-bottom: 16px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <div style="font-size: 13px; font-weight: 800;">🖌️ 個別カスタム配色</div>
+        <button id="customColorToggle" class="btn btn-sm btn-ghost" style="font-size: 11px; padding: 4px 8px;">▼ 開く</button>
+      </div>
+      <div id="customColorPanel" style="display: none; padding: 10px; background: var(--dim-bg); border: 2px solid var(--card-border); border-radius: 8px; font-size: 12px;">
+        <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 8px;">
+          💡 上のテーマよりも個別の指定が優先されます。お好みの色に変更できます。
+        </div>
+        <div class="custom-color-grid" style="display: grid; grid-template-columns: 1fr auto auto; gap: 6px 8px; align-items: center; margin-bottom: 10px;">
+          <label style="font-size: 11px; font-weight: 700;">🌐 全体の背景</label>
+          <input type="color" class="custom-color-input" data-color-var="--bg" style="width: 38px; height: 28px; padding: 2px; border: 2px solid var(--card-border); border-radius: 4px; cursor: pointer;">
+          <button class="btn btn-sm btn-ghost custom-color-reset" data-color-var="--bg" style="font-size: 10px; padding: 2px 6px;">↺</button>
+
+          <label style="font-size: 11px; font-weight: 700;">🗂️ カードの背景</label>
+          <input type="color" class="custom-color-input" data-color-var="--card-bg" style="width: 38px; height: 28px; padding: 2px; border: 2px solid var(--card-border); border-radius: 4px; cursor: pointer;">
+          <button class="btn btn-sm btn-ghost custom-color-reset" data-color-var="--card-bg" style="font-size: 10px; padding: 2px 6px;">↺</button>
+
+          <label style="font-size: 11px; font-weight: 700;">📝 文字色</label>
+          <input type="color" class="custom-color-input" data-color-var="--text" style="width: 38px; height: 28px; padding: 2px; border: 2px solid var(--card-border); border-radius: 4px; cursor: pointer;">
+          <button class="btn btn-sm btn-ghost custom-color-reset" data-color-var="--text" style="font-size: 10px; padding: 2px 6px;">↺</button>
+
+          <label style="font-size: 11px; font-weight: 700;">🎯 アクセント①（ピンク系）</label>
+          <input type="color" class="custom-color-input" data-color-var="--accent-pink" style="width: 38px; height: 28px; padding: 2px; border: 2px solid var(--card-border); border-radius: 4px; cursor: pointer;">
+          <button class="btn btn-sm btn-ghost custom-color-reset" data-color-var="--accent-pink" style="font-size: 10px; padding: 2px 6px;">↺</button>
+
+          <label style="font-size: 11px; font-weight: 700;">📊 アクセント②（水色系）</label>
+          <input type="color" class="custom-color-input" data-color-var="--accent-teal" style="width: 38px; height: 28px; padding: 2px; border: 2px solid var(--card-border); border-radius: 4px; cursor: pointer;">
+          <button class="btn btn-sm btn-ghost custom-color-reset" data-color-var="--accent-teal" style="font-size: 10px; padding: 2px 6px;">↺</button>
+
+          <label style="font-size: 11px; font-weight: 700;">🎯 アクセント③（黄色系）</label>
+          <input type="color" class="custom-color-input" data-color-var="--accent-yellow" style="width: 38px; height: 28px; padding: 2px; border: 2px solid var(--card-border); border-radius: 4px; cursor: pointer;">
+          <button class="btn btn-sm btn-ghost custom-color-reset" data-color-var="--accent-yellow" style="font-size: 10px; padding: 2px 6px;">↺</button>
+        </div>
+        <button id="customColorResetAll" class="btn btn-sm btn-ghost" style="color: var(--danger); font-size: 11px;">🔄 すべてプリセットに戻す</button>
+      </div>
+    </div>
+    
+    <div style="margin-bottom: 16px;">
       <div style="font-size: 13px; font-weight: 800; margin-bottom: 6px;">🔐 YouTube詳細データ連携</div>
       <div id="oauthStatusBox" style="padding: 10px; background: var(--dim-bg); border: 2px solid var(--card-border); border-radius: 8px; font-size: 12px;">
         <div style="margin-bottom: 6px;">自分のチャンネルの維持率・CTR・平均視聴時間などの<br>詳細データを取得するには、OAuth認証が必要です。</div>
@@ -354,23 +392,90 @@
     }
   }
   
+  // 個別カスタムカラー（プリセットより優先される）
+  // 形式: { "--bg": "#1a1a2e", "--accent-pink": "#ff6b9d", ... }
+  let customColors = {};
+  try {
+    customColors = JSON.parse(localStorage.getItem('analyzer_custom_colors') || '{}');
+  } catch (e) { customColors = {}; }
+  
+  // カスタム可能な変数の一覧
+  const CUSTOM_COLOR_VARS = ['--bg', '--card-bg', '--text', '--accent-pink', '--accent-teal', '--accent-yellow'];
+  
+  function applyCustomColors() {
+    const root = document.documentElement;
+    // 既存のカスタム値をクリア
+    CUSTOM_COLOR_VARS.forEach(v => root.style.removeProperty(v));
+    // 設定されているものを適用
+    Object.entries(customColors).forEach(([k, v]) => {
+      if (CUSTOM_COLOR_VARS.includes(k) && v) {
+        root.style.setProperty(k, v);
+      }
+    });
+  }
+  
+  function saveCustomColors() {
+    localStorage.setItem('analyzer_custom_colors', JSON.stringify(customColors));
+  }
+  
   function applyTheme() {
     document.documentElement.setAttribute('data-theme', currentTheme);
     document.documentElement.setAttribute('data-color', currentColor);
+    applyCustomColors();
     applyChartTheme();
+  }
+  
+  // 現在の有効な色（カスタム or プリセット）を計算で取得
+  function getEffectiveColor(varName) {
+    if (customColors[varName]) return customColors[varName];
+    // CSSから現在の値を取得（プリセットの値）
+    const computed = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+    return computed || '#000000';
+  }
+  
+  // カスタム入力欄を現在の有効な色で初期化
+  function syncCustomColorInputs() {
+    document.querySelectorAll('.custom-color-input').forEach(input => {
+      const v = input.dataset.colorVar;
+      const color = getEffectiveColor(v);
+      // 入力欄は#rrggbb形式しか受け付けないので、変換できない色（rgba等）は無視
+      const hex = toHexColor(color);
+      if (hex) input.value = hex;
+    });
+  }
+  
+  // 任意のCSS色文字列を #rrggbb に変換（無理ならnull）
+  function toHexColor(c) {
+    if (!c) return null;
+    c = c.trim();
+    // 既に#rrggbbなら大文字化して返す
+    if (/^#[0-9a-fA-F]{6}$/.test(c)) return c.toLowerCase();
+    if (/^#[0-9a-fA-F]{3}$/.test(c)) {
+      // #abc → #aabbcc
+      return ('#' + c[1]+c[1] + c[2]+c[2] + c[3]+c[3]).toLowerCase();
+    }
+    // rgb(r,g,b) や rgba を解析
+    const m = c.match(/rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+    if (m) {
+      const toHex = n => Math.max(0, Math.min(255, parseInt(n))).toString(16).padStart(2, '0');
+      return '#' + toHex(m[1]) + toHex(m[2]) + toHex(m[3]);
+    }
+    return null;
   }
   
   // Chart.js のデフォルト色をテーマに応じて切り替え
   function applyChartTheme() {
     if (typeof Chart === 'undefined') return;
     const isDark = currentTheme === 'dark';
-    Chart.defaults.color = isDark ? '#e8e8ea' : '#2d2d2d';
+    // 文字色とグリッド色は --text からも取得（カスタム配色対応）
+    const textColor = getEffectiveColor('--text') || (isDark ? '#e8e8ea' : '#2d2d2d');
+    Chart.defaults.color = textColor;
     Chart.defaults.borderColor = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)';
     if (Chart.defaults.scale) {
       Chart.defaults.scale.grid = Chart.defaults.scale.grid || {};
       Chart.defaults.scale.grid.color = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
       Chart.defaults.scale.ticks = Chart.defaults.scale.ticks || {};
-      Chart.defaults.scale.ticks.color = isDark ? '#cfcfd8' : '#2d2d2d';
+      Chart.defaults.scale.ticks.color = textColor;
     }
     // 既存のチャートを再描画して反映
     if (typeof renderAll === 'function') {
@@ -1770,6 +1875,8 @@
     }
     // データサイズ表示
     updateDataSizeStatus();
+    // カスタムカラー入力欄を現在の値で初期化
+    syncCustomColorInputs();
   }
   
   // データサイズを表示
@@ -1940,6 +2047,55 @@
       applyTheme();
       updateSettingsModal();
     });
+  });
+  
+  // ==== カスタムカラー ====
+  // 開閉トグル
+  document.getElementById('customColorToggle').addEventListener('click', () => {
+    const panel = document.getElementById('customColorPanel');
+    const btn = document.getElementById('customColorToggle');
+    if (panel.style.display === 'none' || panel.style.display === '') {
+      panel.style.display = 'block';
+      btn.textContent = '▲ 閉じる';
+      // 開いた時に最新の値で初期化
+      syncCustomColorInputs();
+    } else {
+      panel.style.display = 'none';
+      btn.textContent = '▼ 開く';
+    }
+  });
+  
+  // カラーピッカー：色変更
+  document.querySelectorAll('.custom-color-input').forEach(input => {
+    input.addEventListener('input', () => {
+      const v = input.dataset.colorVar;
+      customColors[v] = input.value;
+      saveCustomColors();
+      applyCustomColors();
+      applyChartTheme();
+    });
+  });
+  
+  // 各色のリセット
+  document.querySelectorAll('.custom-color-reset').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const v = btn.dataset.colorVar;
+      delete customColors[v];
+      saveCustomColors();
+      applyCustomColors();
+      applyChartTheme();
+      syncCustomColorInputs();
+    });
+  });
+  
+  // すべてリセット
+  document.getElementById('customColorResetAll').addEventListener('click', () => {
+    if (!confirm('個別カスタム配色をすべてプリセットに戻しますか？')) return;
+    customColors = {};
+    saveCustomColors();
+    applyCustomColors();
+    applyChartTheme();
+    syncCustomColorInputs();
   });
   
   // ==== OAuth認証（YouTube Analytics API用） ====
