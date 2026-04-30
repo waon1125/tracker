@@ -1930,6 +1930,8 @@
   
   function renderBucketEditList(buckets) {
     const list = document.getElementById('bucketEditList');
+    // 入力欄の共通スタイル（input-fieldのmin-width:220pxとflex:1を上書き）
+    const inputStyle = 'width: 56px; min-width: 0; flex: 0 0 auto; padding: 4px; text-align: center; font-size: 14px;';
     list.innerHTML = buckets.map((b, i) => {
       const minM = Math.floor(b.min / 60);
       const minS = b.min % 60;
@@ -1937,23 +1939,19 @@
       const maxM = b.max === Infinity ? '' : Math.floor((b.max - 1) / 60);
       const maxS = b.max === Infinity ? '' : ((b.max - 1) % 60);
       return `
-        <div class="bucket-edit-row" data-row-idx="${i}" style="display: flex; align-items: center; gap: 8px; padding: 8px; background: var(--dim-bg); border-radius: 8px; flex-wrap: nowrap;">
+        <div class="bucket-edit-row" data-row-idx="${i}" style="display: flex; align-items: center; gap: 6px; padding: 8px; background: var(--dim-bg); border-radius: 8px; flex-wrap: nowrap;">
           <div style="font-weight: 800; color: var(--text-muted); width: 28px; flex-shrink: 0;">[${i + 1}]</div>
-          <div style="display: flex; align-items: center; gap: 3px; flex-shrink: 0;">
-            <input type="number" min="0" max="99" class="input-field bucket-min-m" value="${minM}" style="width: 48px; padding: 4px; text-align: center;">
-            <span style="font-weight: 800;">:</span>
-            <input type="number" min="0" max="59" class="input-field bucket-min-s" value="${minS}" style="width: 48px; padding: 4px; text-align: center;">
-          </div>
-          <div style="font-weight: 800; color: var(--text-muted); flex-shrink: 0;">〜</div>
-          <div style="display: flex; align-items: center; gap: 3px; flex-shrink: 0; min-width: 0;">
-            ${isLast 
-              ? `<span style="font-size: 12px; color: var(--text-faint); font-style: italic; white-space: nowrap;">（終了なし）</span>` 
-              : `<input type="number" min="0" max="99" class="input-field bucket-max-m" value="${maxM}" style="width: 48px; padding: 4px; text-align: center;">
-                 <span style="font-weight: 800;">:</span>
-                 <input type="number" min="0" max="59" class="input-field bucket-max-s" value="${maxS}" style="width: 48px; padding: 4px; text-align: center;">`
-            }
-          </div>
-          <div style="font-size: 11px; color: var(--text-muted); margin-left: auto; flex-shrink: 0;">分:秒</div>
+          <input type="number" min="0" max="99" class="input-field bucket-min-m" value="${minM}" style="${inputStyle}">
+          <span style="font-weight: 800; flex-shrink: 0;">:</span>
+          <input type="number" min="0" max="59" class="input-field bucket-min-s" value="${minS}" style="${inputStyle}">
+          <span style="font-weight: 800; color: var(--text-muted); flex-shrink: 0; margin: 0 4px;">〜</span>
+          ${isLast 
+            ? `<span style="font-size: 12px; color: var(--text-faint); font-style: italic; white-space: nowrap; flex-shrink: 0;">（終了なし）</span>` 
+            : `<input type="number" min="0" max="99" class="input-field bucket-max-m" value="${maxM}" style="${inputStyle}">
+               <span style="font-weight: 800; flex-shrink: 0;">:</span>
+               <input type="number" min="0" max="59" class="input-field bucket-max-s" value="${maxS}" style="${inputStyle}">`
+          }
+          <div style="font-size: 11px; color: var(--text-muted); margin-left: auto; flex-shrink: 0; white-space: nowrap;">分:秒</div>
         </div>
       `;
     }).join('');
