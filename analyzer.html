@@ -1155,10 +1155,23 @@
           </div>
         </div>
         <div class="section">
-          <h3 class="section-title">🎬 追跡中の動画 (${vids.length}本)</h3>
-          ${vids.length === 0 
-            ? `<div class="empty-state"><div class="empty-emoji">🎬</div><div class="empty-text">動画がまだ取得されていません</div></div>`
-            : renderVideoListHtml(vids)}
+          <h3 class="section-title" data-video-list-title="${tabKey}">🎬 追跡中の動画 ${(() => {
+            const filtered = filterVideosByPeriod(vids, durationPeriodState[tabKey]);
+            const isFiltered = durationPeriodState[tabKey] && durationPeriodState[tabKey].period !== 'all';
+            return isFiltered ? `(${vids.length}本中 ${filtered.length}本)` : `(${vids.length}本)`;
+          })()}</h3>
+          <div class="video-list-container" data-video-list-container="${tabKey}">
+            ${(() => {
+              if (vids.length === 0) {
+                return `<div class="empty-state"><div class="empty-emoji">🎬</div><div class="empty-text">動画がまだ取得されていません</div></div>`;
+              }
+              const filtered = filterVideosByPeriod(vids, durationPeriodState[tabKey]);
+              if (filtered.length === 0) {
+                return `<div class="empty-state" style="padding: 20px;"><div class="empty-text">指定した期間内に該当する動画がありません</div></div>`;
+              }
+              return renderVideoListHtml(filtered);
+            })()}
+          </div>
         </div>
       `;
       
@@ -1541,7 +1554,8 @@
       totalViews: 0,
       avgViews: 0,
       maxViews: 0,
-      minViews: 0
+      minViews: 0,
+      isTotal: false
     }));
     
     let outOfRangeCount = 0; // 10分未満で集計対象外になった本数
@@ -1569,9 +1583,30 @@
       }
     });
     
-    // 全体での最大平均（バーグラフのスケール用）
-    const maxAvg = Math.max(...bucketStats.map(b => b.avgViews), 1);
-    const totalCounted = bucketStats.reduce((sum, b) => sum + b.videos.length, 0);
+    // 「10:00〜40:00」合計バケット（10:00以上40:00未満の動画＝最後の "40:00〜" を除く全部）
+    const totalBucket = {
+      label: '10:00〜40:00',
+      videos: [],
+      totalViews: 0,
+      avgViews: 0,
+      maxViews: 0,
+      minViews: 0,
+      isTotal: true
+    };
+    bucketStats.slice(0, 5).forEach(b => {
+      totalBucket.videos.push(...b.videos);
+      totalBucket.totalViews += b.totalViews;
+    });
+    if (totalBucket.videos.length > 0) {
+      totalBucket.avgViews = Math.round(totalBucket.totalViews / totalBucket.videos.length);
+      totalBucket.maxViews = Math.max(...totalBucket.videos.map(v => v.views));
+      totalBucket.minViews = Math.min(...totalBucket.videos.map(v => v.views));
+    }
+    bucketStats.push(totalBucket);
+    
+    // 全体での最大平均（バーグラフのスケール用、合計バケットは除外）
+    const maxAvg = Math.max(...bucketStats.filter(b => !b.isTotal).map(b => b.avgViews), 1);
+    const totalCounted = bucketStats.filter(b => !b.isTotal).reduce((sum, b) => sum + b.videos.length, 0);
     
     if (totalCounted === 0) {
       const emptyMsg = range
@@ -1593,11 +1628,18 @@
              <div><span style="color: var(--accent-pink); font-weight: 800;">max</span> <span style="color: var(--text);">${b.maxViews.toLocaleString()}</span></div>
            </div>`
         : '';
+      // 合計行は色・区切りで区別する
+      const isTotal = b.isTotal;
+      const rowExtraStyle = isTotal
+        ? 'border-top: 2px solid var(--accent-teal); margin-top: 4px; padding-top: 12px; background: var(--dim-bg); border-radius: 6px;'
+        : '';
+      const labelExtra = isTotal ? `<span style="font-size: 9px; color: var(--accent-teal); margin-left: 4px; font-weight: 800;">📊TOTAL</span>` : '';
+      const barColor = isTotal ? 'var(--accent-teal)' : 'var(--accent-pink)';
       return `
-        <div class="duration-row" style="display: grid; grid-template-columns: 110px 1fr 140px; gap: 10px; align-items: center; padding: 8px 6px; border-bottom: 1px dashed var(--section-dashed);">
-          <div style="font-size: 13px; font-weight: 700; color: var(--text);">${b.label}</div>
+        <div class="duration-row" style="display: grid; grid-template-columns: 110px 1fr 140px; gap: 10px; align-items: center; padding: 8px 6px; border-bottom: 1px dashed var(--section-dashed); ${rowExtraStyle}">
+          <div style="font-size: 13px; font-weight: 700; color: var(--text);">${b.label}${labelExtra}</div>
           <div style="position: relative; height: 28px; background: var(--dim-bg); border-radius: 6px; overflow: hidden;">
-            <div style="position: absolute; left: 0; top: 0; bottom: 0; width: ${barPct}%; background: ${hasData ? 'var(--accent-pink)' : 'transparent'}; border-radius: 6px; transition: width 0.3s;"></div>
+            <div style="position: absolute; left: 0; top: 0; bottom: 0; width: ${barPct}%; background: ${hasData ? barColor : 'transparent'}; border-radius: 6px; transition: width 0.3s;"></div>
             <div style="position: absolute; left: 8px; top: 0; bottom: 0; display: flex; align-items: center; font-size: 12px; font-weight: 700; color: ${hasData && barPct > 30 ? 'var(--on-accent)' : 'var(--text)'}; text-shadow: ${hasData && barPct > 30 ? '0 1px 2px rgba(0,0,0,0.3)' : 'none'}; white-space: nowrap;">${avgText}${hasData ? ' 回（平均）' : ''}</div>
           </div>
           <div style="font-size: 11px; color: var(--text-muted); text-align: right;">
@@ -1621,6 +1663,19 @@
   }
   
   // 尺別グラフを再描画（期間状態に応じて）
+  // 動画リストを期間stateでフィルター
+  function filterVideosByPeriod(list, state) {
+    if (!state) return list;
+    const range = resolveDurationPeriod(state);
+    if (!range) return list;
+    return list.filter(v => {
+      const t = new Date(v.publishedAt).getTime();
+      if (range.fromMs !== null && t < range.fromMs) return false;
+      if (range.toMs !== null && t > range.toMs) return false;
+      return true;
+    });
+  }
+  
   function rerenderDurationStats(tabKey) {
     const container = document.querySelector(`.duration-stats-container[data-duration-tab="${tabKey}"]`);
     if (!container) return;
@@ -1628,6 +1683,37 @@
     const range = resolveDurationPeriod(state);
     const vids = videos.filter(v => v.tabKey === tabKey);
     container.innerHTML = renderDurationStatsHtml(vids, { range });
+    // 動画一覧も連動してフィルター
+    rerenderVideoList(tabKey);
+  }
+  
+  // 動画一覧の再描画（期間フィルター連動）
+  function rerenderVideoList(tabKey) {
+    const container = document.querySelector(`.video-list-container[data-video-list-container="${tabKey}"]`);
+    const titleEl = document.querySelector(`[data-video-list-title="${tabKey}"]`);
+    if (!container) return;
+    const state = durationPeriodState[tabKey];
+    const allVids = videos.filter(v => v.tabKey === tabKey);
+    const filtered = filterVideosByPeriod(allVids, state);
+    // タイトル更新
+    if (titleEl) {
+      const isFiltered = state && state.period !== 'all';
+      titleEl.innerHTML = isFiltered
+        ? `🎬 追跡中の動画 (${allVids.length}本中 ${filtered.length}本)`
+        : `🎬 追跡中の動画 (${allVids.length}本)`;
+    }
+    // リスト本体
+    if (filtered.length === 0) {
+      container.innerHTML = allVids.length === 0
+        ? `<div class="empty-state"><div class="empty-emoji">🎬</div><div class="empty-text">動画がまだ取得されていません</div></div>`
+        : `<div class="empty-state" style="padding: 20px;"><div class="empty-text">指定した期間内に該当する動画がありません</div></div>`;
+    } else {
+      container.innerHTML = renderVideoListHtml(filtered);
+    }
+    // 動画リスト内の各種ボタンのハンドラを再接続
+    if (typeof attachVideoListHandlers === 'function') {
+      attachVideoListHandlers(container.parentElement);
+    }
   }
   
   // 尺別グラフのコントロールを接続（fixed tab描画後に呼ぶ）
