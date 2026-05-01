@@ -1130,10 +1130,13 @@
         <div class="section">
           <h3 class="section-title">📈 再生数グラフ</h3>
           <div class="graph-controls" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;">
-            <button class="btn btn-sm graph-type-btn active" data-graph-type="scatter" data-graph-tab="${tabKey}">📊 散布図</button>
-            <button class="btn btn-sm graph-type-btn" data-graph-type="bar" data-graph-tab="${tabKey}">📊 棒グラフ</button>
+            <button class="btn btn-sm graph-type-btn" data-graph-type="scatter" data-graph-tab="${tabKey}">📊 散布図</button>
+            <button class="btn btn-sm graph-type-btn active" data-graph-type="bar" data-graph-tab="${tabKey}">📊 棒グラフ</button>
             <button class="btn btn-sm graph-type-btn" data-graph-type="line" data-graph-tab="${tabKey}">📈 折れ線</button>
             <span style="flex: 1;"></span>
+            <label style="font-size: 11px; display: flex; align-items: center; gap: 4px;" title="動画尺バケットで色分け表示。ONにすると尺枠チェックボックスとも連携">
+              <input type="checkbox" class="graph-color-by-bucket" data-graph-tab="${tabKey}"> 🎨 尺別色分け
+            </label>
             <label style="font-size: 11px; display: flex; align-items: center; gap: 4px;">
               <input type="checkbox" class="graph-log-scale" data-graph-tab="${tabKey}"> 対数軸
             </label>
@@ -1553,8 +1556,8 @@
               ${vids.length > 0 ? `
                 <div style="margin-bottom: 10px;">
                   <div class="graph-controls" style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px;">
-                    <button class="btn btn-sm graph-type-btn active" data-graph-type="scatter" data-graph-tab="rival-${ch.id}">📊 散布図</button>
-                    <button class="btn btn-sm graph-type-btn" data-graph-type="bar" data-graph-tab="rival-${ch.id}">📊 棒</button>
+                    <button class="btn btn-sm graph-type-btn" data-graph-type="scatter" data-graph-tab="rival-${ch.id}">📊 散布図</button>
+                    <button class="btn btn-sm graph-type-btn active" data-graph-type="bar" data-graph-tab="rival-${ch.id}">📊 棒</button>
                     <button class="btn btn-sm graph-type-btn" data-graph-type="line" data-graph-tab="rival-${ch.id}">📈 折れ線</button>
                     <span style="flex: 1;"></span>
                     <label style="font-size: 10px; display: flex; align-items: center; gap: 4px;">
@@ -2013,6 +2016,13 @@
         if (cb.checked) state.selectedBuckets.add(bucketKey);
         else state.selectedBuckets.delete(bucketKey);
         rerenderVideoList(tabKey);
+        // 色分けON時はグラフも再描画（バケット選択と連動）
+        const gState = graphState[tabKey];
+        if (gState && gState.colorByBucket) {
+          const vids = videos.filter(v => v.tabKey === tabKey);
+          const graphColor = tabKey === 'copi' ? '#7575ff' : '#ff6b9d';
+          renderPlaybackChart(tabKey, vids, { color: graphColor });
+        }
       });
     });
     // 全選択/全解除ボタン
@@ -2022,12 +2032,25 @@
       selectAllBtn.onclick = () => {
         state.selectedBuckets = new Set(['b0', 'b1', 'b2', 'b3', 'b4', 'b5', 'total']);
         rerenderDurationStats(tabKey);
+        // グラフも更新
+        const gState = graphState[tabKey];
+        if (gState && gState.colorByBucket) {
+          const vids = videos.filter(v => v.tabKey === tabKey);
+          const graphColor = tabKey === 'copi' ? '#7575ff' : '#ff6b9d';
+          renderPlaybackChart(tabKey, vids, { color: graphColor });
+        }
       };
     }
     if (deselectAllBtn) {
       deselectAllBtn.onclick = () => {
         state.selectedBuckets = new Set();
         rerenderDurationStats(tabKey);
+        const gState = graphState[tabKey];
+        if (gState && gState.colorByBucket) {
+          const vids = videos.filter(v => v.tabKey === tabKey);
+          const graphColor = tabKey === 'copi' ? '#7575ff' : '#ff6b9d';
+          renderPlaybackChart(tabKey, vids, { color: graphColor });
+        }
       };
     }
   }
@@ -3278,11 +3301,27 @@
   
   // ==== 再生数グラフ（タブ別・比較用） ====
   const tabCharts = {};
-  const graphState = {}; // key: tabKey, value: { type, logScale, period, offset }
+  const graphState = {}; // key: tabKey, value: { type, logScale, period, offset, colorByBucket }
+  
+  // 尺バケット用カラーパレット（CSS変数で参照可能なカラー）
+  // b0=青, b1=緑, b2=黄, b3=オレンジ, b4=赤, b5=紫
+  const BUCKET_COLORS = {
+    b0: '#5cb3ff',  // 青（10-14:59）
+    b1: '#5bd17a',  // 緑（15-19:59）
+    b2: '#ffd93d',  // 黄（20-24:59）
+    b3: '#ff9f43',  // オレンジ（25-29:59）
+    b4: '#ff6b6b',  // 赤（30-39:59）
+    b5: '#a78bfa'   // 紫（40:00〜）
+  };
+  
+  function getBucketLabel(bucketKey, tabBuckets) {
+    const b = tabBuckets.find(x => x.key === bucketKey);
+    return b ? bucketLabel(b) : bucketKey;
+  }
   
   function getGraphState(tabKey) {
     if (!graphState[tabKey]) {
-      graphState[tabKey] = { type: 'scatter', logScale: false, period: 'all', offset: 'latest' };
+      graphState[tabKey] = { type: 'bar', logScale: false, period: 'all', offset: 'latest', colorByBucket: false };
     }
     return graphState[tabKey];
   }
@@ -3396,29 +3435,87 @@
       // 単一チャンネル
       totalCount = filtered.length;
       const points = [];
+      
+      // 色分けONかつ tabKey が copi/waon の時のみ尺バケット情報を引く
+      const colorByBucket = state.colorByBucket && (tabKey === 'copi' || tabKey === 'waon');
+      const tabBuckets = colorByBucket ? loadDurationBuckets(tabKey) : null;
+      const selectedBuckets = colorByBucket ? (durationPeriodState[tabKey]?.selectedBuckets || new Set()) : null;
+      const hasSelection = selectedBuckets && selectedBuckets.size > 0;
+      
       for (const v of filtered) {
         const snap = getSnapshotValue(v, state.offset);
         if (!snap) continue;
         matchedCount++;
+        // バケット判定（色分けON時のみ）
+        let bucketKey = null;
+        let pointColor = accent;
+        if (colorByBucket && tabBuckets) {
+          if ((v.videoKind || 'normal') === 'normal') {
+            const sec = isoToSeconds(v.duration);
+            const matched = findBestBucket(sec, tabBuckets);
+            if (matched) {
+              bucketKey = matched.key;
+              // チェックボックス選択中はチェック対象だけ色付け、それ以外はグレー
+              if (hasSelection) {
+                // 'total' チェックは b0〜b4 を含む
+                const expanded = new Set();
+                selectedBuckets.forEach(k => {
+                  if (k === 'total') ['b0','b1','b2','b3','b4'].forEach(x => expanded.add(x));
+                  else expanded.add(k);
+                });
+                pointColor = expanded.has(bucketKey) ? (BUCKET_COLORS[bucketKey] || accent) : '#777';
+              } else {
+                pointColor = BUCKET_COLORS[bucketKey] || accent;
+              }
+            } else {
+              // 10分未満などバケット外
+              pointColor = hasSelection ? '#777' : '#999';
+            }
+          } else {
+            // ショート/ライブはグレー
+            pointColor = '#666';
+          }
+        }
         points.push({
           x: new Date(v.publishedAt).getTime(),
           y: snap.views,
           title: v.title, videoId: v.videoId, vid: v.id, channelTitle: v.channelTitle,
-          thumbnailUrl: getThumbnailUrl(v)
+          thumbnailUrl: getThumbnailUrl(v),
+          bucketKey,
+          pointColor
         });
       }
       allPoints = points;
-      datasetsForChart = [{
-        label: '再生数',
-        data: points,
-        backgroundColor: accent,
-        borderColor: accent,
-        pointRadius: 5,
-        pointHoverRadius: 8,
-        borderWidth: 2,
-        tension: 0.15,
-        fill: false
-      }];
+      
+      if (colorByBucket) {
+        // 各点ごとに色を変えるため、backgroundColor に配列を渡す
+        const colorArray = points.map(p => p.pointColor);
+        datasetsForChart = [{
+          label: '再生数',
+          data: points,
+          backgroundColor: colorArray,
+          borderColor: colorArray,
+          pointBackgroundColor: colorArray,
+          pointBorderColor: colorArray,
+          pointRadius: 5,
+          pointHoverRadius: 8,
+          borderWidth: 2,
+          tension: 0.15,
+          fill: false
+        }];
+      } else {
+        datasetsForChart = [{
+          label: '再生数',
+          data: points,
+          backgroundColor: accent,
+          borderColor: accent,
+          pointRadius: 5,
+          pointHoverRadius: 8,
+          borderWidth: 2,
+          tension: 0.15,
+          fill: false
+        }];
+      }
     }
     
     // マッチング情報表示
@@ -3613,6 +3710,58 @@
     } else if (state.type === 'bar') {
       // 棒グラフ：投稿日順で1本ずつ
       const sorted = [...allPoints].sort((a, b) => a.x - b.x);
+      
+      // 色分けON時：バケット平均ラインを別データセットとして重ねる
+      const colorByBucket = state.colorByBucket && (tabKey === 'copi' || tabKey === 'waon');
+      const bucketAverageDatasets = [];
+      let bucketLegendItems = [];
+      if (colorByBucket && sorted.length > 0) {
+        // 各バケットの平均値を計算
+        const tabBuckets = loadDurationBuckets(tabKey);
+        const selectedBuckets = durationPeriodState[tabKey]?.selectedBuckets || new Set();
+        const hasSelection = selectedBuckets.size > 0;
+        const expanded = new Set();
+        if (hasSelection) {
+          selectedBuckets.forEach(k => {
+            if (k === 'total') ['b0','b1','b2','b3','b4'].forEach(x => expanded.add(x));
+            else expanded.add(k);
+          });
+        }
+        // バケットごとに平均を計算
+        const bucketSums = {};
+        sorted.forEach(p => {
+          if (p.bucketKey) {
+            if (!bucketSums[p.bucketKey]) bucketSums[p.bucketKey] = { sum: 0, count: 0 };
+            bucketSums[p.bucketKey].sum += p.y;
+            bucketSums[p.bucketKey].count++;
+          }
+        });
+        // 各バケットを別datasetとして横線を描画
+        for (const b of tabBuckets) {
+          if (hasSelection && !expanded.has(b.key)) continue; // 選択外スキップ
+          const stat = bucketSums[b.key];
+          if (!stat || stat.count === 0) continue;
+          const avg = Math.round(stat.sum / stat.count);
+          const color = BUCKET_COLORS[b.key] || accent;
+          // 各棒の位置に同じ平均値を持つラインを引く（folioscale 全幅）
+          bucketAverageDatasets.push({
+            type: 'line',
+            label: `${bucketLabel(b)} 平均: ${avg.toLocaleString()}`,
+            data: sorted.map(() => avg),
+            borderColor: color,
+            backgroundColor: color,
+            borderWidth: 2,
+            borderDash: [8, 4],
+            pointRadius: 0,
+            pointHoverRadius: 0,
+            tension: 0,
+            fill: false,
+            order: 0 // 棒の上に表示
+          });
+          bucketLegendItems.push({ key: b.key, label: bucketLabel(b), color, avg, count: stat.count });
+        }
+      }
+      
       chartConfig = {
         type: 'bar',
         data: {
@@ -3620,26 +3769,39 @@
             const d = new Date(p.x);
             return `${d.getMonth()+1}/${d.getDate()}`;
           }),
-          datasets: [{
-            label: '再生数',
-            data: sorted.map(p => p.y),
-            backgroundColor: sorted.map(p => {
-              // 比較タブならチャンネル色を使う
-              if (opts.channelGroups) {
-                for (const g of opts.channelGroups) {
-                  if (g.videos.some(v => v.id === p.vid)) return g.color;
+          datasets: [
+            {
+              label: '再生数',
+              data: sorted.map(p => p.y),
+              backgroundColor: sorted.map(p => {
+                // 色分けON：各動画のpointColor（既に判定済み）を使う
+                if (colorByBucket && p.pointColor) return p.pointColor;
+                // 比較タブならチャンネル色を使う
+                if (opts.channelGroups) {
+                  for (const g of opts.channelGroups) {
+                    if (g.videos.some(v => v.id === p.vid)) return g.color;
+                  }
+                  return accent;
                 }
                 return accent;
-              }
-              return accent;
-            }),
-            borderColor: accent
-          }]
+              }),
+              borderColor: accent,
+              order: 1 // ラインの下に表示
+            },
+            ...bucketAverageDatasets
+          ]
         },
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: {
-            legend: { display: false },
+            legend: { 
+              display: bucketAverageDatasets.length > 0,
+              labels: {
+                filter: (item) => item.text !== '再生数', // 「再生数」凡例は隠す
+                color: getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#333',
+                font: { size: 10 }
+              }
+            },
             tooltip: {
               enabled: false,
               external: function(context) {
@@ -3649,8 +3811,18 @@
                 if (tooltip.opacity === 0) { el.style.opacity = '0'; return; }
                 const dp = tooltip.dataPoints?.[0];
                 if (!dp) return;
+                // datasetIndex で 0 = 棒、1〜 = 平均ライン
+                if (dp.datasetIndex !== 0) {
+                  // 平均ラインなら独自表示
+                  el.innerHTML = `<div style="font-size: 13px; font-weight: 700;">${dp.dataset.label}</div>`;
+                  const canvas = context.chart.canvas;
+                  const rect = canvas.getBoundingClientRect();
+                  el.style.opacity = '1';
+                  el.style.left = (rect.left + window.scrollX + tooltip.caretX + 12) + 'px';
+                  el.style.top = (rect.top + window.scrollY + tooltip.caretY - 30) + 'px';
+                  return;
+                }
                 const p = sorted[dp.dataIndex] || {};
-                // 散布図用ハンドラと同じ形式に変換して再利用
                 const fakeContext = {
                   chart: context.chart,
                   tooltip: {
@@ -3704,6 +3876,18 @@
       logToggle.addEventListener('change', () => {
         const state = getGraphState(tabKey);
         state.logScale = logToggle.checked;
+        renderPlaybackChart(tabKey, videosForChart, opts);
+      });
+    }
+    // 色分け（尺バケット）
+    const colorToggle = document.querySelector(`[data-graph-tab="${tabKey}"].graph-color-by-bucket`);
+    if (colorToggle) {
+      // 状態反映
+      const state = getGraphState(tabKey);
+      colorToggle.checked = !!state.colorByBucket;
+      colorToggle.addEventListener('change', () => {
+        const state = getGraphState(tabKey);
+        state.colorByBucket = colorToggle.checked;
         renderPlaybackChart(tabKey, videosForChart, opts);
       });
     }
