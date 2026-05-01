@@ -416,7 +416,9 @@
     } else {
       localStorage.removeItem('analyzer_oauth_token');
       localStorage.removeItem('analyzer_oauth_expire');
-      localStorage.removeItem('analyzer_oauth_channel');
+      // チャンネルIDは「過去に連携した記録」として残す
+      // → ページ起動時のサイレント更新の判定に使う
+      // 完全な解除は oauthLogoutBtn で行う（そちらで明示的に削除）
     }
   }
   
@@ -549,9 +551,24 @@
       startRealtimeListener();
       startTrackerListener();
       switchTab(currentTab);
-      // 既存OAuthトークンがあれば、自動更新タイマー開始
+      // 既存OAuthトークンがあれば、状態をチェックして自動更新
+      // ※ページを閉じてた間にタイマーが消えているので、起動時に必ずチェック
       if (oauthAccessToken && oauthTokenExpireAt) {
-        schedulePreemptiveRefresh();
+        const remaining = oauthTokenExpireAt - Date.now();
+        if (remaining < 10 * 60 * 1000) {
+          // 期限切れ or 10分以内に切れる → 即サイレント更新を試みる
+          console.log(`[OAuth] ページ起動時のトークン残り: ${Math.round(remaining/1000)}秒 → サイレント更新試行`);
+          // 描画完了後に非同期で実行（待たない）
+          setTimeout(() => trySilentRefresh(), 500);
+        } else {
+          // まだ余裕あり → 通常通りタイマー開始
+          schedulePreemptiveRefresh();
+        }
+      } else if (!oauthAccessToken && oauthMyChannelId) {
+        // トークンは無いがチャンネルIDが残っている → 過去に連携してた
+        // → サイレント更新で復活を試みる
+        console.log('[OAuth] トークン無し&過去の連携あり → サイレント更新試行');
+        setTimeout(() => trySilentRefresh(), 500);
       }
     } else {
       currentUser = null;
@@ -3009,6 +3026,8 @@
     oauthTokenExpireAt = 0;
     oauthMyChannelId = null;
     saveOAuthState();
+    // 明示的にログアウトされた場合のみ、過去の連携記録も削除
+    localStorage.removeItem('analyzer_oauth_channel');
     if (_refreshTimerId) { clearTimeout(_refreshTimerId); _refreshTimerId = null; }
     updateSettingsModal();
     alert('連携を解除しました');
