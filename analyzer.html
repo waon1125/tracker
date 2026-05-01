@@ -1248,7 +1248,7 @@
       renderPlaybackChart(tabKey, vids, { color: graphColor });
       attachGraphControls(tabKey, vids, { color: graphColor });
       
-      // 詳細データ一斉取得
+      // 詳細データ一斉取得（バッチ分割方式：100本×60秒休憩、失敗多発時はそのバッチをリトライ）
       const analyticsBtn = container.querySelector('[data-fixed-analytics]');
       if (analyticsBtn) {
         analyticsBtn.addEventListener('click', async () => {
@@ -1262,44 +1262,163 @@
             return;
           }
           if (freshVids.length === 0) { alert('動画が登録されていません'); return; }
-          if (!confirm(`${freshVids.length}本の動画の詳細データ（維持率等）を取得します。\n⚠️ 自分のチャンネルかつOAuth認証済みの場合のみ動作します。\n※ 既存の動画も最新データで上書きされます。`)) return;
-          analyticsBtn.disabled = true; analyticsBtn.textContent = '⏳ 取得中... (0/' + freshVids.length + ')';
-          let ok = 0, fail = 0;
+
+          // バッチ設定
+          const BATCH_SIZE = 100;
+          const REST_MS = 60 * 1000; // 60秒休憩
+          const FAIL_THRESHOLD = 0.5; // 50%以上失敗したらリトライ
+          const totalBatches = Math.ceil(freshVids.length / BATCH_SIZE);
+          const estimatedMinutes = Math.ceil((totalBatches * 60 + freshVids.length * 0.3) / 60);
+
+          if (!confirm(
+            `${freshVids.length}本の動画の詳細データ（維持率等）を取得します。\n\n` +
+            `📦 バッチ分割：${BATCH_SIZE}本ずつ × ${totalBatches}回\n` +
+            `⏸️ バッチ間休憩：60秒\n` +
+            `⏱️ 推定時間：約${estimatedMinutes}分\n\n` +
+            `※ 既存の動画も最新データで上書きされます。\n` +
+            `※ バッチ内で50%以上失敗したら、そのバッチを1回だけリトライします。`
+          )) return;
+
+          analyticsBtn.disabled = true;
+          let totalOk = 0, totalFail = 0;
           const errors = [];
-          for (let i = 0; i < freshVids.length; i++) {
-            const v = freshVids[i];
+          let aborted = false;
+
+          // 1動画を取得する関数
+          async function fetchOne(v) {
             try {
-              console.log(`[一斉取得] ${i+1}/${freshVids.length}: ${v.title}`);
               const data = await fetchAnalytics(v.videoId, v.publishedAt);
               if (data) {
                 const snapshot = { ...data, at: new Date().toISOString() };
-                // ★ videos配列の中の本物のレコードを探して上書き（参照ズレ対策）
                 const realV = videos.find(x => x.videoId === v.videoId);
                 if (realV) {
                   realV.analytics = { ...snapshot, fetchedAt: snapshot.at };
                   if (realV.analyticsSnapshots) delete realV.analyticsSnapshots;
                 }
-                ok++;
+                return { ok: true };
               } else {
-                fail++;
-                errors.push(`・${v.title.slice(0, 30)}: データなし（投稿直後の可能性）`);
+                const daysSincePub = Math.floor((Date.now() - new Date(v.publishedAt).getTime()) / 86400000);
+                let reason;
+                if (daysSincePub > 365 * 3) {
+                  reason = '3年以上前の動画はAPI仕様で取得不可';
+                } else if (daysSincePub < 7) {
+                  reason = '投稿直後でデータ未集計（数日待ってください）';
+                } else {
+                  reason = 'データなし';
+                }
+                return { ok: false, reason };
               }
             } catch (err) {
-              console.error(`[Analytics] ${v.videoId}:`, err);
-              fail++;
-              errors.push(`・${v.title.slice(0, 30)}: ${err.message}`);
-              if (err.message.includes('401') || err.message.includes('Unauthorized') || err.message.includes('invalid_token')) {
-                errors.push('⚠️ OAuth認証が切れました。再連携してください。');
-                break;
+              return { ok: false, reason: err.message, error: err };
+            }
+          }
+
+          // 1バッチを処理する関数
+          async function processBatch(batch, batchIdx, isRetry = false) {
+            const labelPrefix = isRetry ? '🔁 リトライ中' : '⏳ 取得中';
+            let batchOk = 0, batchFail = 0;
+            const batchErrors = [];
+            for (let i = 0; i < batch.length; i++) {
+              const v = batch[i];
+              const overallIdx = batchIdx * BATCH_SIZE + i;
+              analyticsBtn.textContent =
+                `${labelPrefix} バッチ ${batchIdx + 1}/${totalBatches} (${overallIdx + 1}/${freshVids.length})`;
+              const r = await fetchOne(v);
+              if (r.ok) { batchOk++; }
+              else {
+                batchFail++;
+                batchErrors.push(`・${v.title.slice(0, 30)}: ${r.reason}`);
+                if (r.error && (r.error.message.includes('401') || r.error.message.includes('Unauthorized') || r.error.message.includes('invalid_token'))) {
+                  return { batchOk, batchFail, batchErrors, abort: true };
+                }
+              }
+              await new Promise(r => setTimeout(r, 300));
+            }
+            return { batchOk, batchFail, batchErrors, abort: false };
+          }
+
+          // バッチごとに処理
+          for (let bi = 0; bi < totalBatches; bi++) {
+            const start = bi * BATCH_SIZE;
+            const batch = freshVids.slice(start, start + BATCH_SIZE);
+            console.log(`[一斉取得] バッチ ${bi + 1}/${totalBatches} 開始（${batch.length}本）`);
+
+            // 1回目実行
+            let result = await processBatch(batch, bi, false);
+
+            if (result.abort) {
+              totalOk += result.batchOk;
+              totalFail += result.batchFail;
+              errors.push(...result.batchErrors);
+              errors.push('⚠️ OAuth認証が切れました。再連携してください。');
+              aborted = true;
+              break;
+            }
+
+            // 失敗率が高ければリトライ
+            const failRate = result.batchFail / batch.length;
+            if (failRate >= FAIL_THRESHOLD && batch.length >= 2) {
+              console.log(`[一斉取得] バッチ ${bi + 1}: 失敗率 ${(failRate * 100).toFixed(0)}% → 30秒休憩後リトライ`);
+              const retryRestEnd = Date.now() + 30 * 1000;
+              while (Date.now() < retryRestEnd) {
+                const remaining = Math.ceil((retryRestEnd - Date.now()) / 1000);
+                analyticsBtn.textContent = `⏸️ リトライ前の休憩中... ${remaining}秒（バッチ ${bi + 1}）`;
+                await new Promise(r => setTimeout(r, 1000));
+              }
+
+              // 失敗した動画だけ抽出してリトライ（直近5分以内に成功保存したものはスキップ）
+              const stillFailing = batch.filter(v => {
+                const realV = videos.find(x => x.videoId === v.videoId);
+                if (!realV || !realV.analytics) return true;
+                if (!realV.analytics.fetchedAt) return true;
+                return (Date.now() - new Date(realV.analytics.fetchedAt).getTime()) > 5 * 60 * 1000;
+              });
+
+              if (stillFailing.length > 0) {
+                const retryResult = await processBatch(stillFailing, bi, true);
+                if (retryResult.abort) {
+                  totalOk += result.batchOk + retryResult.batchOk;
+                  totalFail += retryResult.batchFail;
+                  errors.push(...retryResult.batchErrors);
+                  errors.push('⚠️ OAuth認証が切れました。再連携してください。');
+                  aborted = true;
+                  break;
+                }
+                totalOk += result.batchOk + retryResult.batchOk;
+                totalFail += retryResult.batchFail;
+                errors.push(...retryResult.batchErrors);
+              } else {
+                totalOk += result.batchOk;
+                totalFail += result.batchFail;
+                errors.push(...result.batchErrors);
+              }
+            } else {
+              totalOk += result.batchOk;
+              totalFail += result.batchFail;
+              errors.push(...result.batchErrors);
+            }
+
+            // バッチごとに途中保存（万一の中断時も結果を残す）
+            try { await saveFirestoreData(); } catch(e) { console.error('[一斉取得] 途中保存エラー:', e); }
+
+            // 最終バッチでなければ60秒休憩
+            if (bi < totalBatches - 1) {
+              const restEndTime = Date.now() + REST_MS;
+              while (Date.now() < restEndTime) {
+                const remainingSec = Math.ceil((restEndTime - Date.now()) / 1000);
+                analyticsBtn.textContent = `⏸️ 休憩中... 次のバッチまで${remainingSec}秒（${bi + 1}/${totalBatches}完了）`;
+                await new Promise(r => setTimeout(r, 1000));
               }
             }
-            analyticsBtn.textContent = '⏳ 取得中... (' + (i+1) + '/' + freshVids.length + ')';
-            await new Promise(r => setTimeout(r, 300));
           }
+
+          // 最終保存と再描画
           await saveFirestoreData();
           renderAll();
           analyticsBtn.disabled = false; analyticsBtn.textContent = '📊 詳細データ一斉取得';
-          let msg = `✅ 取得完了\n成功: ${ok}本\n失敗: ${fail}本`;
+
+          let msg = aborted ? `⚠️ 中断しました\n` : `✅ 取得完了\n`;
+          msg += `成功: ${totalOk}本\n失敗: ${totalFail}本`;
           if (errors.length > 0) {
             msg += '\n\n【エラー詳細】\n' + errors.slice(0, 10).join('\n');
             if (errors.length > 10) msg += `\n...他${errors.length - 10}件`;
