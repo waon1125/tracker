@@ -549,6 +549,10 @@
       startRealtimeListener();
       startTrackerListener();
       switchTab(currentTab);
+      // 既存OAuthトークンがあれば、自動更新タイマー開始
+      if (oauthAccessToken && oauthTokenExpireAt) {
+        schedulePreemptiveRefresh();
+      }
     } else {
       currentUser = null;
       showLogin();
@@ -2831,11 +2835,127 @@
     return true;
   }
   
+  // ==== サイレント自動再認証 ====
+  // Google Identity Services の prompt:'' モードで、ユーザーに何も見せずにトークン更新
+  // ※既にGoogleにログイン済み&同意済みのときのみ成功する
+  let _silentRefreshInProgress = false;
+  let _refreshTimerId = null;
+  
+  async function trySilentRefresh() {
+    if (_silentRefreshInProgress) return false;
+    if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
+      console.log('[OAuth] Google Identity Services 未ロード、サイレント更新スキップ');
+      return false;
+    }
+    if (!GOOGLE_OAUTH_CLIENT_ID || GOOGLE_OAUTH_CLIENT_ID === 'YOUR_OAUTH_CLIENT_ID_HERE') {
+      return false;
+    }
+    
+    _silentRefreshInProgress = true;
+    console.log('[OAuth] サイレント更新を試行...');
+    
+    return new Promise((resolve) => {
+      let timeoutId = null;
+      try {
+        const tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_OAUTH_CLIENT_ID,
+          scope: YT_ANALYTICS_SCOPES,
+          prompt: '', // ★これが肝：ダイアログを出さない
+          callback: async (response) => {
+            if (timeoutId) clearTimeout(timeoutId);
+            _silentRefreshInProgress = false;
+            if (response.error) {
+              console.log('[OAuth] サイレント更新失敗:', response.error);
+              resolve(false);
+              return;
+            }
+            oauthAccessToken = response.access_token;
+            oauthTokenExpireAt = Date.now() + (response.expires_in * 1000) - 60000;
+            try {
+              if (!oauthMyChannelId) await fetchMyChannelId();
+              saveOAuthState();
+              console.log('[OAuth] サイレント更新成功 ✅');
+              schedulePreemptiveRefresh(); // 次の更新もスケジュール
+              // UIに反映（設定パネルが開いていれば）
+              if (typeof updateSettingsModal === 'function') {
+                try { updateSettingsModal(); } catch(e) {}
+              }
+              resolve(true);
+            } catch (err) {
+              console.error('[OAuth] チャンネルID取得エラー:', err);
+              resolve(false);
+            }
+          },
+          error_callback: (err) => {
+            if (timeoutId) clearTimeout(timeoutId);
+            _silentRefreshInProgress = false;
+            console.log('[OAuth] サイレント更新エラー:', err);
+            resolve(false);
+          }
+        });
+        // タイムアウト保険（5秒で諦める）
+        timeoutId = setTimeout(() => {
+          _silentRefreshInProgress = false;
+          console.log('[OAuth] サイレント更新タイムアウト');
+          resolve(false);
+        }, 5000);
+        tokenClient.requestAccessToken({ prompt: '' });
+      } catch (err) {
+        _silentRefreshInProgress = false;
+        if (timeoutId) clearTimeout(timeoutId);
+        console.error('[OAuth] サイレント更新例外:', err);
+        resolve(false);
+      }
+    });
+  }
+  
+  // 期限の10分前にプリエンプティブ更新をスケジュール
+  function schedulePreemptiveRefresh() {
+    if (_refreshTimerId) {
+      clearTimeout(_refreshTimerId);
+      _refreshTimerId = null;
+    }
+    if (!oauthAccessToken || !oauthTokenExpireAt) return;
+    
+    const now = Date.now();
+    const timeUntilExpire = oauthTokenExpireAt - now;
+    // 期限の10分前、ただし最低でも30秒後にする
+    const refreshAt = Math.max(timeUntilExpire - 10 * 60 * 1000, 30 * 1000);
+    
+    if (refreshAt > 0) {
+      console.log(`[OAuth] ${Math.round(refreshAt / 1000)}秒後にプリエンプティブ更新をスケジュール`);
+      _refreshTimerId = setTimeout(async () => {
+        console.log('[OAuth] プリエンプティブ更新開始');
+        await trySilentRefresh();
+      }, refreshAt);
+    }
+  }
+  
+  // 必要時にトークンを確実に取得（API呼び出し直前に呼ぶ）
+  // 期限切れ・もしくは2分以内に切れる場合はサイレント更新を試みる
+  async function ensureFreshOAuthToken() {
+    const now = Date.now();
+    const closeToExpiry = oauthAccessToken && oauthTokenExpireAt 
+      && (oauthTokenExpireAt - now) < 2 * 60 * 1000;
+    if (!isOAuthAuthenticated() || closeToExpiry) {
+      const ok = await trySilentRefresh();
+      return ok;
+    }
+    return true;
+  }
+  
   // OAuth 期限切れを検知した時の親切な再連携プロンプト
+  // ※サイレント更新を先に試みて、失敗したらプロンプト
   async function promptReauth() {
+    // まずサイレント更新を試みる
+    const silentOk = await trySilentRefresh();
+    if (silentOk) {
+      console.log('[OAuth] サイレント更新で復旧、プロンプト不要');
+      return true;
+    }
+    // ダメならユーザーに通知
     const reconnect = confirm('⏰ YouTube連携の期限が切れました。\n再連携しますか？（ワンクリックで復活）');
     if (!reconnect) return false;
-    // OAuth連携ボタンをクリックさせる
     document.getElementById('oauthLoginBtn')?.click();
     return true;
   }
@@ -2865,6 +2985,7 @@
             try {
               await fetchMyChannelId();
               saveOAuthState();
+              schedulePreemptiveRefresh(); // 自動更新タイマー開始
               resolve();
             } catch (err) {
               reject(err);
@@ -2888,8 +3009,25 @@
     oauthTokenExpireAt = 0;
     oauthMyChannelId = null;
     saveOAuthState();
+    if (_refreshTimerId) { clearTimeout(_refreshTimerId); _refreshTimerId = null; }
     updateSettingsModal();
     alert('連携を解除しました');
+  });
+  
+  // タブが再表示された時、トークンが切れかけていたら裏で更新
+  // （PCをスリープから起こした、別タブから戻ってきた、などのケースで切れていることがある）
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && oauthAccessToken) {
+      const remaining = oauthTokenExpireAt - Date.now();
+      // 残り10分未満なら早めに更新
+      if (remaining < 10 * 60 * 1000) {
+        console.log('[OAuth] タブ復帰 → サイレント更新を試行');
+        trySilentRefresh();
+      } else {
+        // タイマーが消えていたら再スケジュール
+        if (!_refreshTimerId) schedulePreemptiveRefresh();
+      }
+    }
   });
   
   async function fetchMyChannelId() {
@@ -2909,6 +3047,8 @@
   // 自チャンネルのみ（OAuth必須）
   // 注：impressions/CTRはAnalytics APIでは取得不可（YouTube Studio専用）
   async function fetchAnalytics(videoId, videoPublishedAt, options = {}) {
+    // API呼び出し直前にトークン状態をチェック、切れかけならサイレント更新
+    await ensureFreshOAuthToken();
     if (!isOAuthAuthenticated()) {
       throw new Error('OAuth未認証。設定から連携してください');
     }
