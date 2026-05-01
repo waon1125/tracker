@@ -1141,12 +1141,22 @@
               <input type="checkbox" class="graph-log-scale" data-graph-tab="${tabKey}"> 対数軸
             </label>
           </div>
-          <div class="graph-controls" style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; align-items: center;">
+          <div class="duration-period-controls" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; align-items: center;">
             <span style="font-size: 11px; color: var(--text-muted); margin-right: 4px;">📅期間:</span>
-            <button class="btn btn-sm graph-period-btn active" data-graph-period="all" data-graph-tab="${tabKey}">全期間</button>
-            <button class="btn btn-sm graph-period-btn" data-graph-period="6m" data-graph-tab="${tabKey}">6ヶ月</button>
-            <button class="btn btn-sm graph-period-btn" data-graph-period="3m" data-graph-tab="${tabKey}">3ヶ月</button>
-            <button class="btn btn-sm graph-period-btn" data-graph-period="1m" data-graph-tab="${tabKey}">1ヶ月</button>
+            <button class="btn btn-sm duration-period-btn ${durationPeriodState[tabKey].period === 'all' ? 'active' : ''}" data-duration-period="all" data-duration-tab="${tabKey}">全期間</button>
+            <button class="btn btn-sm duration-period-btn ${durationPeriodState[tabKey].period === '1y' ? 'active' : ''}" data-duration-period="1y" data-duration-tab="${tabKey}">1年</button>
+            <button class="btn btn-sm duration-period-btn ${durationPeriodState[tabKey].period === '6m' ? 'active' : ''}" data-duration-period="6m" data-duration-tab="${tabKey}">6ヶ月</button>
+            <button class="btn btn-sm duration-period-btn ${durationPeriodState[tabKey].period === '3m' ? 'active' : ''}" data-duration-period="3m" data-duration-tab="${tabKey}">3ヶ月</button>
+            <button class="btn btn-sm duration-period-btn ${durationPeriodState[tabKey].period === '1m' ? 'active' : ''}" data-duration-period="1m" data-duration-tab="${tabKey}">1ヶ月</button>
+          </div>
+          <div class="duration-period-controls" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; align-items: center;">
+            <span style="font-size: 11px; color: var(--text-muted); margin-right: 4px;">📆カスタム:</span>
+            <input type="date" class="input-field duration-date-from" data-duration-tab="${tabKey}" style="width: auto; padding: 4px 6px; font-size: 12px;">
+            <span style="font-size: 11px; color: var(--text-muted);">〜</span>
+            <input type="date" class="input-field duration-date-to" data-duration-tab="${tabKey}" style="width: auto; padding: 4px 6px; font-size: 12px;">
+            <button class="btn btn-sm duration-date-apply" data-duration-tab="${tabKey}">適用</button>
+            <button class="btn btn-sm btn-ghost duration-date-clear" data-duration-tab="${tabKey}">クリア</button>
+            <span style="font-size: 10px; color: var(--text-faint);">※ 期間設定は下の尺別グラフ・動画一覧と連動</span>
           </div>
           <div class="graph-controls" style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; align-items: center;">
             <span style="font-size: 11px; color: var(--text-muted); margin-right: 4px;">⏱️時点:</span>
@@ -2005,6 +2015,11 @@
     attachBucketCheckboxHandlers(tabKey);
     // 動画一覧も連動してフィルター
     rerenderVideoList(tabKey);
+    // 再生数グラフも連動（同じ期間stateを使う）
+    if (tabKey === 'copi' || tabKey === 'waon') {
+      const graphColor = tabKey === 'copi' ? '#7575ff' : '#ff6b9d';
+      renderPlaybackChart(tabKey, vids, { color: graphColor });
+    }
   }
   
   // バケットチェックボックスのイベントハンドラ
@@ -2090,6 +2105,12 @@
   function attachDurationStatsControls(tabKey) {
     const state = durationPeriodState[tabKey];
     
+    // 全カスタム入力欄を同期
+    const syncCustomInputs = (fromVal, toVal) => {
+      document.querySelectorAll(`.duration-date-from[data-duration-tab="${tabKey}"]`).forEach(el => el.value = fromVal);
+      document.querySelectorAll(`.duration-date-to[data-duration-tab="${tabKey}"]`).forEach(el => el.value = toVal);
+    };
+    
     // プリセットボタン
     document.querySelectorAll(`.duration-period-btn[data-duration-tab="${tabKey}"]`).forEach(btn => {
       btn.classList.toggle('active', btn.dataset.durationPeriod === state.period);
@@ -2097,22 +2118,18 @@
         state.period = btn.dataset.durationPeriod;
         state.from = null;
         state.to = null;
-        // 全プリセットボタンのactive更新
+        // 全プリセットボタンのactive更新（複数の同名UIに対応）
         document.querySelectorAll(`.duration-period-btn[data-duration-tab="${tabKey}"]`).forEach(b => {
           b.classList.toggle('active', b.dataset.durationPeriod === state.period);
         });
         // カスタム入力欄もクリア
-        const fromInput = document.querySelector(`.duration-date-from[data-duration-tab="${tabKey}"]`);
-        const toInput = document.querySelector(`.duration-date-to[data-duration-tab="${tabKey}"]`);
-        if (fromInput) fromInput.value = '';
-        if (toInput) toInput.value = '';
+        syncCustomInputs('', '');
         rerenderDurationStats(tabKey);
       });
     });
     
-    // カスタム期間：適用ボタン
-    const applyBtn = document.querySelector(`.duration-date-apply[data-duration-tab="${tabKey}"]`);
-    if (applyBtn) {
+    // カスタム期間：適用ボタン（複数あれば全部に登録）
+    document.querySelectorAll(`.duration-date-apply[data-duration-tab="${tabKey}"]`).forEach(applyBtn => {
       applyBtn.addEventListener('click', () => {
         const fromInput = document.querySelector(`.duration-date-from[data-duration-tab="${tabKey}"]`);
         const toInput = document.querySelector(`.duration-date-to[data-duration-tab="${tabKey}"]`);
@@ -2129,22 +2146,20 @@
         state.period = 'custom';
         state.from = fromVal || null;
         state.to = toVal || null;
-        // プリセットボタンのactiveを全部外す
+        // 全プリセットボタンのactiveを外す
         document.querySelectorAll(`.duration-period-btn[data-duration-tab="${tabKey}"]`).forEach(b => {
           b.classList.remove('active');
         });
+        // 全カスタム入力欄に値を反映
+        syncCustomInputs(fromVal, toVal);
         rerenderDurationStats(tabKey);
       });
-    }
+    });
     
-    // カスタム期間：クリアボタン
-    const clearBtn = document.querySelector(`.duration-date-clear[data-duration-tab="${tabKey}"]`);
-    if (clearBtn) {
+    // カスタム期間：クリアボタン（複数あれば全部に登録）
+    document.querySelectorAll(`.duration-date-clear[data-duration-tab="${tabKey}"]`).forEach(clearBtn => {
       clearBtn.addEventListener('click', () => {
-        const fromInput = document.querySelector(`.duration-date-from[data-duration-tab="${tabKey}"]`);
-        const toInput = document.querySelector(`.duration-date-to[data-duration-tab="${tabKey}"]`);
-        if (fromInput) fromInput.value = '';
-        if (toInput) toInput.value = '';
+        syncCustomInputs('', '');
         state.period = 'all';
         state.from = null;
         state.to = null;
@@ -2153,14 +2168,16 @@
         });
         rerenderDurationStats(tabKey);
       });
-    }
+    });
     
-    // カスタム入力欄に既存の状態を反映
+    // カスタム入力欄に既存の状態を反映（複数のUIすべて）
     if (state.period === 'custom') {
-      const fromInput = document.querySelector(`.duration-date-from[data-duration-tab="${tabKey}"]`);
-      const toInput = document.querySelector(`.duration-date-to[data-duration-tab="${tabKey}"]`);
-      if (fromInput && state.from) fromInput.value = state.from;
-      if (toInput && state.to) toInput.value = state.to;
+      document.querySelectorAll(`.duration-date-from[data-duration-tab="${tabKey}"]`).forEach(el => {
+        if (state.from) el.value = state.from;
+      });
+      document.querySelectorAll(`.duration-date-to[data-duration-tab="${tabKey}"]`).forEach(el => {
+        if (state.to) el.value = state.to;
+      });
     }
     
     // バケットチェックボックスのハンドラ
@@ -3367,8 +3384,24 @@
     // 既存chart破棄
     if (tabCharts[tabKey]) { tabCharts[tabKey].destroy(); tabCharts[tabKey] = null; }
     
-    // 期間フィルター適用
-    const filtered = filterByPeriod(videosForChart || [], state.period);
+    // 期間フィルター適用：copi/waon タブは durationPeriodState と連動、それ以外（rival, compare）は graphState
+    let filtered;
+    if (tabKey === 'copi' || tabKey === 'waon') {
+      const dpState = durationPeriodState[tabKey];
+      const range = resolveDurationPeriod(dpState);
+      if (!range) {
+        filtered = videosForChart || [];
+      } else {
+        filtered = (videosForChart || []).filter(v => {
+          const t = new Date(v.publishedAt).getTime();
+          if (range.fromMs !== null && t < range.fromMs) return false;
+          if (range.toMs !== null && t > range.toMs) return false;
+          return true;
+        });
+      }
+    } else {
+      filtered = filterByPeriod(videosForChart || [], state.period);
+    }
     
     if (filtered.length === 0) {
       const parent = canvas.parentElement;
@@ -3453,27 +3486,24 @@
           if ((v.videoKind || 'normal') === 'normal') {
             const sec = isoToSeconds(v.duration);
             const matched = findBestBucket(sec, tabBuckets);
-            if (matched) {
-              bucketKey = matched.key;
-              // チェックボックス選択中はチェック対象だけ色付け、それ以外はグレー
-              if (hasSelection) {
-                // 'total' チェックは b0〜b4 を含む
-                const expanded = new Set();
-                selectedBuckets.forEach(k => {
-                  if (k === 'total') ['b0','b1','b2','b3','b4'].forEach(x => expanded.add(x));
-                  else expanded.add(k);
-                });
-                pointColor = expanded.has(bucketKey) ? (BUCKET_COLORS[bucketKey] || accent) : '#777';
-              } else {
-                pointColor = BUCKET_COLORS[bucketKey] || accent;
-              }
+            if (matched) bucketKey = matched.key;
+          }
+          // 「チェックなし＝単一ピンク（accent）」「チェックあり＝該当だけ色付き、他はグレー」
+          if (hasSelection) {
+            // 'total' チェックは b0〜b4 を含む
+            const expanded = new Set();
+            selectedBuckets.forEach(k => {
+              if (k === 'total') ['b0','b1','b2','b3','b4'].forEach(x => expanded.add(x));
+              else expanded.add(k);
+            });
+            if (bucketKey && expanded.has(bucketKey)) {
+              pointColor = BUCKET_COLORS[bucketKey] || accent;
             } else {
-              // 10分未満などバケット外
-              pointColor = hasSelection ? '#777' : '#999';
+              pointColor = '#777'; // グレーアウト
             }
           } else {
-            // ショート/ライブはグレー
-            pointColor = '#666';
+            // チェックなし＝普通のピンクと同じ表示
+            pointColor = accent;
           }
         }
         points.push({
@@ -3712,37 +3742,37 @@
       const sorted = [...allPoints].sort((a, b) => a.x - b.x);
       
       // 色分けON時：バケット平均ラインを別データセットとして重ねる
+      // ※ チェックされたバケットがある時のみ平均ライン表示（チェックなし＝単一ピンクで重ねない）
       const colorByBucket = state.colorByBucket && (tabKey === 'copi' || tabKey === 'waon');
       const bucketAverageDatasets = [];
       let bucketLegendItems = [];
       if (colorByBucket && sorted.length > 0) {
-        // 各バケットの平均値を計算
         const tabBuckets = loadDurationBuckets(tabKey);
         const selectedBuckets = durationPeriodState[tabKey]?.selectedBuckets || new Set();
         const hasSelection = selectedBuckets.size > 0;
-        const expanded = new Set();
+        // チェックなしの場合は平均ライン無し（単一ピンク表示にとどめる）
         if (hasSelection) {
+          const expanded = new Set();
           selectedBuckets.forEach(k => {
             if (k === 'total') ['b0','b1','b2','b3','b4'].forEach(x => expanded.add(x));
             else expanded.add(k);
           });
-        }
-        // バケットごとに平均を計算
-        const bucketSums = {};
-        sorted.forEach(p => {
-          if (p.bucketKey) {
-            if (!bucketSums[p.bucketKey]) bucketSums[p.bucketKey] = { sum: 0, count: 0 };
-            bucketSums[p.bucketKey].sum += p.y;
-            bucketSums[p.bucketKey].count++;
-          }
-        });
-        // 各バケットを別datasetとして横線を描画
-        for (const b of tabBuckets) {
-          if (hasSelection && !expanded.has(b.key)) continue; // 選択外スキップ
-          const stat = bucketSums[b.key];
-          if (!stat || stat.count === 0) continue;
-          const avg = Math.round(stat.sum / stat.count);
-          const color = BUCKET_COLORS[b.key] || accent;
+          // バケットごとに平均を計算
+          const bucketSums = {};
+          sorted.forEach(p => {
+            if (p.bucketKey) {
+              if (!bucketSums[p.bucketKey]) bucketSums[p.bucketKey] = { sum: 0, count: 0 };
+              bucketSums[p.bucketKey].sum += p.y;
+              bucketSums[p.bucketKey].count++;
+            }
+          });
+          // 各バケットを別datasetとして横線を描画
+          for (const b of tabBuckets) {
+            if (!expanded.has(b.key)) continue; // 選択外スキップ
+            const stat = bucketSums[b.key];
+            if (!stat || stat.count === 0) continue;
+            const avg = Math.round(stat.sum / stat.count);
+            const color = BUCKET_COLORS[b.key] || accent;
           // 各棒の位置に同じ平均値を持つラインを引く（folioscale 全幅）
           bucketAverageDatasets.push({
             type: 'line',
@@ -3759,6 +3789,7 @@
             order: 0 // 棒の上に表示
           });
           bucketLegendItems.push({ key: b.key, label: bucketLabel(b), color, avg, count: stat.count });
+          }
         }
       }
       
