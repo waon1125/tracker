@@ -1192,6 +1192,25 @@
             const isFiltered = isPeriodFiltered || isBucketFiltered;
             return isFiltered ? `(${vids.length}本中 ${filtered.length}本)` : `(${vids.length}本)`;
           })()}</h3>
+          <div class="video-sort-controls" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; padding: 8px; background: var(--dim-bg); border-radius: 8px;">
+            <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">🔀 並び順:</span>
+            <select class="input-field video-sort-select" data-sort-tab="${tabKey}" style="width: auto; min-width: 0; flex: 0 0 auto; padding: 4px 8px; font-size: 12px;">
+              <option value="date_desc">📅 投稿日（新→旧）</option>
+              <option value="date_asc">📅 投稿日（旧→新）</option>
+              <option value="views_desc">👀 再生数（多→少）</option>
+              <option value="views_asc">👀 再生数（少→多）</option>
+              <option value="subrate_desc">📈 登録率（高→低）</option>
+              <option value="subrate_asc">📉 登録率（低→高）</option>
+            </select>
+            <span class="sub-metric-wrap" data-sub-metric-wrap="${tabKey}" style="display: none; gap: 6px; align-items: center;">
+              <span style="font-size: 11px; color: var(--text-muted);">指標:</span>
+              <select class="input-field video-submetric-select" data-submetric-tab="${tabKey}" style="width: auto; min-width: 0; flex: 0 0 auto; padding: 4px 8px; font-size: 12px;">
+                <option value="gained">登録増加（+のみ）</option>
+                <option value="lost">登録減少（-のみ）</option>
+                <option value="net">純増（増加 - 減少）</option>
+              </select>
+            </span>
+          </div>
           <div class="video-list-container" data-video-list-container="${tabKey}">
             ${(() => {
               if (vids.length === 0) {
@@ -1201,7 +1220,7 @@
               if (filtered.length === 0) {
                 return `<div class="empty-state" style="padding: 20px;"><div class="empty-text">指定した条件に該当する動画がありません</div></div>`;
               }
-              return renderVideoListHtml(filtered);
+              return renderVideoListHtml(filtered, videoListSortState[tabKey]);
             })()}
           </div>
         </div>
@@ -1666,6 +1685,78 @@
     waon: { period: 'all', from: null, to: null, selectedBuckets: new Set() }
   };
   
+  // タブごとの動画一覧の並び順 state
+  // sortBy: 'date_desc' | 'date_asc' | 'views_desc' | 'views_asc' | 'subrate_desc' | 'subrate_asc'
+  // subMetric: 'gained' | 'lost' | 'net'（並び順が subrate_xxx の時の指標）
+  const videoListSortState = {
+    copi: { sortBy: 'date_desc', subMetric: 'gained' },
+    waon: { sortBy: 'date_desc', subMetric: 'gained' }
+  };
+  
+  // 動画の登録率を計算（指標に応じて）
+  // 戻り値：パーセント値（例：0.5）または null（データ不足）
+  function getSubscriberRate(v, metric) {
+    if (!v.analytics) return null;
+    const a = v.analytics;
+    const views = (a.views !== undefined && a.views !== null) ? a.views : 0;
+    if (!views || views <= 0) return null;
+    let numerator;
+    if (metric === 'gained') {
+      numerator = a.subGained;
+    } else if (metric === 'lost') {
+      numerator = a.subLost;
+    } else if (metric === 'net') {
+      const g = a.subGained || 0;
+      const l = a.subLost || 0;
+      numerator = g - l;
+    } else {
+      return null;
+    }
+    if (numerator === undefined || numerator === null) return null;
+    return (numerator / views) * 100;
+  }
+  
+  // 動画リストを並び順stateに従ってソート
+  function sortVideoList(list, sortState) {
+    if (!sortState) return list;
+    const { sortBy, subMetric } = sortState;
+    const sorted = [...list];
+    switch (sortBy) {
+      case 'date_desc':
+        sorted.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+        break;
+      case 'date_asc':
+        sorted.sort((a, b) => new Date(a.publishedAt) - new Date(b.publishedAt));
+        break;
+      case 'views_desc':
+      case 'views_asc': {
+        const getViews = (v) => {
+          const last = v.snapshots && v.snapshots.length > 0 ? v.snapshots[v.snapshots.length - 1] : null;
+          return last ? (last.views || 0) : 0;
+        };
+        sorted.sort((a, b) => sortBy === 'views_desc' ? getViews(b) - getViews(a) : getViews(a) - getViews(b));
+        break;
+      }
+      case 'subrate_desc':
+      case 'subrate_asc': {
+        // null は末尾に集める
+        sorted.sort((a, b) => {
+          const ra = getSubscriberRate(a, subMetric);
+          const rb = getSubscriberRate(b, subMetric);
+          // null同士は投稿日新しい順
+          if (ra === null && rb === null) return new Date(b.publishedAt) - new Date(a.publishedAt);
+          if (ra === null) return 1;
+          if (rb === null) return -1;
+          return sortBy === 'subrate_desc' ? rb - ra : ra - rb;
+        });
+        break;
+      }
+      default:
+        break;
+    }
+    return sorted;
+  }
+  
   // 期間状態 → 集計用の絶対日付範囲（{fromMs, toMs} or null）
   function resolveDurationPeriod(state) {
     const now = Date.now();
@@ -1943,7 +2034,7 @@
         ? `<div class="empty-state"><div class="empty-emoji">🎬</div><div class="empty-text">動画がまだ取得されていません</div></div>`
         : `<div class="empty-state" style="padding: 20px;"><div class="empty-text">指定した条件に該当する動画がありません</div></div>`;
     } else {
-      container.innerHTML = renderVideoListHtml(filtered);
+      container.innerHTML = renderVideoListHtml(filtered, videoListSortState[tabKey]);
     }
     // 動画リスト内の各種ボタンのハンドラを再接続
     if (typeof attachVideoListHandlers === 'function') {
@@ -2036,6 +2127,35 @@
     if (editBtn) {
       editBtn.onclick = () => openBucketEditor(tabKey);
     }
+    
+    // 並び順セレクト
+    const sortSelect = document.querySelector(`.video-sort-select[data-sort-tab="${tabKey}"]`);
+    const subMetricSelect = document.querySelector(`.video-submetric-select[data-submetric-tab="${tabKey}"]`);
+    const subMetricWrap = document.querySelector(`[data-sub-metric-wrap="${tabKey}"]`);
+    
+    function updateSubMetricVisibility() {
+      const sortVal = videoListSortState[tabKey].sortBy;
+      const showMetric = sortVal === 'subrate_desc' || sortVal === 'subrate_asc';
+      if (subMetricWrap) subMetricWrap.style.display = showMetric ? 'inline-flex' : 'none';
+    }
+    
+    if (sortSelect) {
+      // 現在の状態を反映
+      sortSelect.value = videoListSortState[tabKey].sortBy;
+      sortSelect.addEventListener('change', () => {
+        videoListSortState[tabKey].sortBy = sortSelect.value;
+        updateSubMetricVisibility();
+        rerenderVideoList(tabKey);
+      });
+    }
+    if (subMetricSelect) {
+      subMetricSelect.value = videoListSortState[tabKey].subMetric;
+      subMetricSelect.addEventListener('change', () => {
+        videoListSortState[tabKey].subMetric = subMetricSelect.value;
+        rerenderVideoList(tabKey);
+      });
+    }
+    updateSubMetricVisibility();
   }
   
   // ===== 時間枠編集モーダル =====
@@ -2128,8 +2248,19 @@
     renderBucketEditList(DEFAULT_DURATION_BUCKETS.map(b => ({ ...b })));
   }
   
-  function renderVideoListHtml(list) {
-    const sorted = [...list].sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+  function renderVideoListHtml(list, sortState) {
+    // ソート（指定があればそれに従う、なければ投稿日降順）
+    const sorted = sortState 
+      ? sortVideoList(list, sortState)
+      : [...list].sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+    
+    const showSubRate = sortState && (sortState.sortBy === 'subrate_desc' || sortState.sortBy === 'subrate_asc');
+    const metricLabel = sortState && sortState.subMetric === 'gained' ? '登録増加'
+      : sortState && sortState.subMetric === 'lost' ? '登録減少'
+      : sortState && sortState.subMetric === 'net' ? '純増'
+      : '登録増加';
+    const metricEmoji = sortState && sortState.subMetric === 'lost' ? '📉' : '📈';
+    
     return '<div class="video-list">' + sorted.map(v => {
       const lastSnap = v.snapshots && v.snapshots.length > 0 
         ? v.snapshots[v.snapshots.length - 1] 
@@ -2141,6 +2272,26 @@
       const d = String(published.getDate()).padStart(2, '0');
       const dateStr = `${y}-${m}-${d}`;
       const durationStr = v.duration ? formatDuration(v.duration) : '';
+      
+      // 登録率（並び順が登録率順の時だけ表示）
+      let subRateHtml = '';
+      if (showSubRate) {
+        const rate = getSubscriberRate(v, sortState.subMetric);
+        if (rate !== null) {
+          const a = v.analytics || {};
+          const numerator = sortState.subMetric === 'gained' ? a.subGained
+            : sortState.subMetric === 'lost' ? a.subLost
+            : (a.subGained || 0) - (a.subLost || 0);
+          const sign = sortState.subMetric === 'lost' ? '-' : '+';
+          const numStr = sortState.subMetric === 'net' 
+            ? (numerator >= 0 ? '+' : '') + numerator.toLocaleString()
+            : sign + Math.abs(numerator || 0).toLocaleString();
+          subRateHtml = `<div class="video-stat" style="background: var(--accent-yellow); color: var(--on-accent); font-weight: 800;">${metricEmoji} ${rate.toFixed(2)}% (${numStr})</div>`;
+        } else {
+          subRateHtml = `<div class="video-stat" style="background: var(--dim-bg); color: var(--text-faint); font-style: italic;">${metricEmoji} データなし</div>`;
+        }
+      }
+      
       return `
         <div class="video-card">
           <div class="video-thumb-wrap" style="display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0;">
@@ -2154,6 +2305,7 @@
               <div class="video-stat">👀 ${lastSnap.views.toLocaleString()}</div>
               <div class="video-stat">👍 ${lastSnap.likes.toLocaleString()}</div>
               <div class="video-stat">💬 ${lastSnap.comments.toLocaleString()}</div>
+              ${subRateHtml}
             </div>
           </div>
           <div class="video-actions">
