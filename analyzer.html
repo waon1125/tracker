@@ -1129,10 +1129,17 @@
         </div>
         <div class="section">
           <h3 class="section-title">📈 再生数グラフ</h3>
-          <div class="graph-controls" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;">
+          <!-- 1行目：グラフタイプ + 期間プリセット + オプション -->
+          <div class="graph-controls" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; align-items: center;">
             <button class="btn btn-sm graph-type-btn" data-graph-type="scatter" data-graph-tab="${tabKey}">📊 散布図</button>
             <button class="btn btn-sm graph-type-btn active" data-graph-type="bar" data-graph-tab="${tabKey}">📊 棒グラフ</button>
             <button class="btn btn-sm graph-type-btn" data-graph-type="line" data-graph-tab="${tabKey}">📈 折れ線</button>
+            <span style="font-size: 11px; color: var(--text-muted); margin-left: 8px;">📅</span>
+            <button class="btn btn-sm duration-period-btn ${durationPeriodState[tabKey].period === 'all' ? 'active' : ''}" data-duration-period="all" data-duration-tab="${tabKey}">全期間</button>
+            <button class="btn btn-sm duration-period-btn ${durationPeriodState[tabKey].period === '1y' ? 'active' : ''}" data-duration-period="1y" data-duration-tab="${tabKey}">1年</button>
+            <button class="btn btn-sm duration-period-btn ${durationPeriodState[tabKey].period === '6m' ? 'active' : ''}" data-duration-period="6m" data-duration-tab="${tabKey}">6ヶ月</button>
+            <button class="btn btn-sm duration-period-btn ${durationPeriodState[tabKey].period === '3m' ? 'active' : ''}" data-duration-period="3m" data-duration-tab="${tabKey}">3ヶ月</button>
+            <button class="btn btn-sm duration-period-btn ${durationPeriodState[tabKey].period === '1m' ? 'active' : ''}" data-duration-period="1m" data-duration-tab="${tabKey}">1ヶ月</button>
             <span style="flex: 1;"></span>
             <label style="font-size: 11px; display: flex; align-items: center; gap: 4px;" title="動画尺バケットで色分け表示。ONにすると尺枠チェックボックスとも連携">
               <input type="checkbox" class="graph-color-by-bucket" data-graph-tab="${tabKey}"> 🎨 尺別色分け
@@ -1141,30 +1148,42 @@
               <input type="checkbox" class="graph-log-scale" data-graph-tab="${tabKey}"> 対数軸
             </label>
           </div>
-          <div class="duration-period-controls" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; align-items: center;">
-            <span style="font-size: 11px; color: var(--text-muted); margin-right: 4px;">📅期間:</span>
-            <button class="btn btn-sm duration-period-btn ${durationPeriodState[tabKey].period === 'all' ? 'active' : ''}" data-duration-period="all" data-duration-tab="${tabKey}">全期間</button>
-            <button class="btn btn-sm duration-period-btn ${durationPeriodState[tabKey].period === '1y' ? 'active' : ''}" data-duration-period="1y" data-duration-tab="${tabKey}">1年</button>
-            <button class="btn btn-sm duration-period-btn ${durationPeriodState[tabKey].period === '6m' ? 'active' : ''}" data-duration-period="6m" data-duration-tab="${tabKey}">6ヶ月</button>
-            <button class="btn btn-sm duration-period-btn ${durationPeriodState[tabKey].period === '3m' ? 'active' : ''}" data-duration-period="3m" data-duration-tab="${tabKey}">3ヶ月</button>
-            <button class="btn btn-sm duration-period-btn ${durationPeriodState[tabKey].period === '1m' ? 'active' : ''}" data-duration-period="1m" data-duration-tab="${tabKey}">1ヶ月</button>
-          </div>
-          <div class="duration-period-controls" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; align-items: center;">
-            <span style="font-size: 11px; color: var(--text-muted); margin-right: 4px;">📆カスタム:</span>
-            <input type="date" class="input-field duration-date-from" data-duration-tab="${tabKey}" style="width: auto; padding: 4px 6px; font-size: 12px;">
-            <span style="font-size: 11px; color: var(--text-muted);">〜</span>
-            <input type="date" class="input-field duration-date-to" data-duration-tab="${tabKey}" style="width: auto; padding: 4px 6px; font-size: 12px;">
-            <button class="btn btn-sm duration-date-apply" data-duration-tab="${tabKey}">適用</button>
-            <button class="btn btn-sm btn-ghost duration-date-clear" data-duration-tab="${tabKey}">クリア</button>
-            <span style="font-size: 10px; color: var(--text-faint);">※ 期間設定は下の尺別グラフ・動画一覧と連動</span>
-          </div>
-          <div class="graph-controls" style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; align-items: center;">
-            <span style="font-size: 11px; color: var(--text-muted); margin-right: 4px;">⏱️時点:</span>
+          <!-- 2行目：時点 + カスタム期間 -->
+          <div class="graph-controls" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; align-items: center;">
+            <span style="font-size: 11px; color: var(--text-muted);">⏱️時点:</span>
             <button class="btn btn-sm graph-offset-btn active" data-graph-offset="latest" data-graph-tab="${tabKey}">最新</button>
             <button class="btn btn-sm graph-offset-btn" data-graph-offset="1h" data-graph-tab="${tabKey}">1時間後</button>
             <button class="btn btn-sm graph-offset-btn" data-graph-offset="1d" data-graph-tab="${tabKey}">1日後</button>
             <button class="btn btn-sm graph-offset-btn" data-graph-offset="1w" data-graph-tab="${tabKey}">1週間後</button>
             <button class="btn btn-sm graph-offset-btn" data-graph-offset="1m" data-graph-tab="${tabKey}">1ヶ月後</button>
+            <span style="font-size: 11px; color: var(--text-muted); margin-left: 12px;">📆カスタム:</span>
+            <input type="date" class="input-field duration-date-from" data-duration-tab="${tabKey}" style="width: 130px; flex: 0 0 auto; min-width: 0; padding: 4px 6px; font-size: 12px;">
+            <span style="font-size: 11px; color: var(--text-muted);">〜</span>
+            <input type="date" class="input-field duration-date-to" data-duration-tab="${tabKey}" style="width: 130px; flex: 0 0 auto; min-width: 0; padding: 4px 6px; font-size: 12px;">
+            <button class="btn btn-sm duration-date-apply" data-duration-tab="${tabKey}">適用</button>
+            <button class="btn btn-sm btn-ghost duration-date-clear" data-duration-tab="${tabKey}">クリア</button>
+          </div>
+          <!-- 3行目：色分けON時のみ表示する尺バケット選択チップ -->
+          <div class="graph-bucket-chips" data-graph-bucket-chips="${tabKey}" style="display: none; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; padding: 6px 8px; background: var(--dim-bg); border-radius: 8px;">
+            <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">🎨 尺枠:</span>
+            ${(() => {
+              const bks = loadDurationBuckets(tabKey);
+              const sel = durationPeriodState[tabKey].selectedBuckets;
+              const chip = (key, label, color) => {
+                const isActive = sel.has(key);
+                const bg = isActive ? color : 'transparent';
+                const fg = isActive ? '#fff' : 'var(--text)';
+                const border = `2px solid ${color}`;
+                const opacity = isActive ? '1' : '0.55';
+                return `<button class="bucket-chip" data-bucket-chip-tab="${tabKey}" data-bucket-chip-key="${key}" style="font-size: 11px; padding: 3px 10px; border-radius: 14px; background: ${bg}; color: ${fg}; border: ${border}; opacity: ${opacity}; font-weight: 700; cursor: pointer;">${label}</button>`;
+              };
+              const chips = bks.map(b => chip(b.key, bucketLabel(b), BUCKET_COLORS[b.key] || '#888')).join('');
+              const totalChip = chip('total', '10:00〜40:00 合計', BUCKET_COLORS.b0); // accent_teal っぽい色がいいけど合計はとりあえず青系
+              return chips + totalChip;
+            })()}
+            <span style="flex: 1;"></span>
+            <button class="btn btn-sm" data-bucket-select-all="${tabKey}" style="font-size: 11px; padding: 3px 8px;">✅ 全選</button>
+            <button class="btn btn-sm btn-ghost" data-bucket-deselect-all="${tabKey}" style="font-size: 11px; padding: 3px 8px;">⬜ 全解</button>
           </div>
           <div class="chart-wrap" style="height: 360px;">
             <canvas id="chart-${tabKey}"></canvas>
@@ -2031,6 +2050,8 @@
         if (cb.checked) state.selectedBuckets.add(bucketKey);
         else state.selectedBuckets.delete(bucketKey);
         rerenderVideoList(tabKey);
+        // チップのスタイルも更新
+        if (typeof refreshBucketChipsStyle === 'function') refreshBucketChipsStyle(tabKey);
         // 色分けON時はグラフも再描画（バケット選択と連動）
         const gState = graphState[tabKey];
         if (gState && gState.colorByBucket) {
@@ -2040,14 +2061,12 @@
         }
       });
     });
-    // 全選択/全解除ボタン
-    const selectAllBtn = document.querySelector(`[data-bucket-select-all="${tabKey}"]`);
-    const deselectAllBtn = document.querySelector(`[data-bucket-deselect-all="${tabKey}"]`);
-    if (selectAllBtn) {
-      selectAllBtn.onclick = () => {
+    // 全選択/全解除ボタン（複数あれば全部に登録）
+    document.querySelectorAll(`[data-bucket-select-all="${tabKey}"]`).forEach(btn => {
+      btn.onclick = () => {
         state.selectedBuckets = new Set(['b0', 'b1', 'b2', 'b3', 'b4', 'b5', 'total']);
         rerenderDurationStats(tabKey);
-        // グラフも更新
+        if (typeof refreshBucketChipsStyle === 'function') refreshBucketChipsStyle(tabKey);
         const gState = graphState[tabKey];
         if (gState && gState.colorByBucket) {
           const vids = videos.filter(v => v.tabKey === tabKey);
@@ -2055,11 +2074,12 @@
           renderPlaybackChart(tabKey, vids, { color: graphColor });
         }
       };
-    }
-    if (deselectAllBtn) {
-      deselectAllBtn.onclick = () => {
+    });
+    document.querySelectorAll(`[data-bucket-deselect-all="${tabKey}"]`).forEach(btn => {
+      btn.onclick = () => {
         state.selectedBuckets = new Set();
         rerenderDurationStats(tabKey);
+        if (typeof refreshBucketChipsStyle === 'function') refreshBucketChipsStyle(tabKey);
         const gState = graphState[tabKey];
         if (gState && gState.colorByBucket) {
           const vids = videos.filter(v => v.tabKey === tabKey);
@@ -2067,7 +2087,7 @@
           renderPlaybackChart(tabKey, vids, { color: graphColor });
         }
       };
-    }
+    });
   }
   
   // 動画一覧の再描画（期間フィルター連動）
@@ -3891,6 +3911,50 @@
   }
   
   // グラフコントロールのイベント紐付け（タブ別）
+  // 尺バケットチップ行の表示制御（色分けON時のみ表示）
+  function updateBucketChipsVisibility(tabKey) {
+    const chipsRow = document.querySelector(`[data-graph-bucket-chips="${tabKey}"]`);
+    if (!chipsRow) return;
+    const state = getGraphState(tabKey);
+    chipsRow.style.display = state.colorByBucket ? 'flex' : 'none';
+  }
+  
+  // 尺バケットチップの再描画（チェック状態に応じてスタイル更新）
+  function refreshBucketChipsStyle(tabKey) {
+    const sel = durationPeriodState[tabKey].selectedBuckets;
+    document.querySelectorAll(`.bucket-chip[data-bucket-chip-tab="${tabKey}"]`).forEach(chip => {
+      const key = chip.dataset.bucketChipKey;
+      const isActive = sel.has(key);
+      // 元の色を data 属性から逆引きできないので、background-color / border-color を読み取る
+      const borderColor = chip.style.borderColor || chip.style.border?.match(/#[0-9a-fA-F]{6}/)?.[0];
+      const colorMatch = chip.style.border.match(/#[0-9a-fA-F]{6}|rgba?\([^)]+\)/);
+      const color = colorMatch ? colorMatch[0] : '#888';
+      chip.style.backgroundColor = isActive ? color : 'transparent';
+      chip.style.color = isActive ? '#fff' : 'var(--text)';
+      chip.style.opacity = isActive ? '1' : '0.55';
+    });
+  }
+  
+  // 尺バケットチップのクリックハンドラ
+  function attachBucketChipsHandlers(tabKey, videosForChart, opts) {
+    const state = durationPeriodState[tabKey];
+    document.querySelectorAll(`.bucket-chip[data-bucket-chip-tab="${tabKey}"]`).forEach(chip => {
+      chip.addEventListener('click', () => {
+        const key = chip.dataset.bucketChipKey;
+        if (state.selectedBuckets.has(key)) state.selectedBuckets.delete(key);
+        else state.selectedBuckets.add(key);
+        // チップのスタイル更新
+        refreshBucketChipsStyle(tabKey);
+        // 尺別グラフのチェックボックスも同期
+        document.querySelectorAll(`.duration-bucket-check[data-bucket-tab="${tabKey}"]`).forEach(cb => {
+          cb.checked = state.selectedBuckets.has(cb.dataset.bucketKey);
+        });
+        // 尺別グラフを再描画（min/max再計算用）
+        rerenderDurationStats(tabKey);
+      });
+    });
+  }
+  
   function attachGraphControls(tabKey, videosForChart, opts = {}) {
     // グラフタイプ
     document.querySelectorAll(`[data-graph-tab="${tabKey}"].graph-type-btn`).forEach(btn => {
@@ -3916,11 +3980,19 @@
       // 状態反映
       const state = getGraphState(tabKey);
       colorToggle.checked = !!state.colorByBucket;
+      // チップ行の表示状態を初期化
+      updateBucketChipsVisibility(tabKey);
       colorToggle.addEventListener('change', () => {
         const state = getGraphState(tabKey);
         state.colorByBucket = colorToggle.checked;
+        updateBucketChipsVisibility(tabKey);
         renderPlaybackChart(tabKey, videosForChart, opts);
       });
+    }
+    
+    // 尺バケットチップ（色分けON時のグラフ上）
+    if (tabKey === 'copi' || tabKey === 'waon') {
+      attachBucketChipsHandlers(tabKey, videosForChart, opts);
     }
     // 期間
     document.querySelectorAll(`[data-graph-tab="${tabKey}"].graph-period-btn`).forEach(btn => {
