@@ -25,7 +25,25 @@
   // OAuth クライアントID（YouTube Analytics API 用）
   // Google Cloud Console > APIとサービス > 認証情報 > OAuth 2.0 クライアント ID から取得
   // 「Web client (auto created by Google Service)」のクライアントID
+  // ※デフォルト：プロジェクトオーナー（waonさん）の Client ID
+  // ※ユーザーごとに「自分専用Client ID」を設定可能（localStorage）
+  //   ブランドアカウント所有者など、デフォルトIDで連携できないユーザー向けの逃げ道
   const GOOGLE_OAUTH_CLIENT_ID = '1013536609350-27j7kldfqq7st1c0ednul4bbcoikvj2e.apps.googleusercontent.com';
+  
+  // 実効Client ID取得：ユーザー設定があればそれを優先、なければデフォルト
+  function getEffectiveOAuthClientId() {
+    const userConfigured = localStorage.getItem('analyzer_user_oauth_client_id');
+    if (userConfigured && userConfigured.trim() && userConfigured.endsWith('.apps.googleusercontent.com')) {
+      return userConfigured.trim();
+    }
+    return GOOGLE_OAUTH_CLIENT_ID;
+  }
+  
+  // ユーザー独自のClient IDを使っているかどうか
+  function isUsingCustomClientId() {
+    const userConfigured = localStorage.getItem('analyzer_user_oauth_client_id');
+    return !!(userConfigured && userConfigured.trim() && userConfigured.endsWith('.apps.googleusercontent.com'));
+  }
   
   const FIXED_TABS = [
     { key: 'copi', emoji: '🌙', label: 'コピプラネット' },
@@ -332,6 +350,29 @@
         <div id="oauthStatus" style="margin-bottom: 8px; font-weight: 700;">📴 未連携</div>
         <button id="oauthLoginBtn" class="btn btn-sm btn-primary">🔐 YouTube連携</button>
         <button id="oauthLogoutBtn" class="btn btn-sm btn-ghost hidden" style="color: var(--danger);">🚪 連携解除</button>
+        
+        <!-- 自分専用 Client ID の設定（折りたたみ） -->
+        <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--section-dashed);">
+          <button id="customClientIdToggle" class="btn btn-sm btn-ghost" style="font-size: 11px; padding: 4px 8px;">▼ 自分専用Client ID（高度な設定）</button>
+          <div id="customClientIdPanel" style="display: none; margin-top: 8px; padding: 10px; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 6px;">
+            <div id="customClientIdStatus" style="font-weight: 700; font-size: 11px; margin-bottom: 6px;">🔵 デフォルト（共通Client ID）で連携します</div>
+            <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 8px; line-height: 1.5;">
+              💡 <b>ブランドアカウント所有者など、デフォルトで連携できない場合用</b>。<br>
+              Google Cloud Console で発行した自分専用のClient IDを入力すると、それを使ってOAuth連携します。<br>
+              空欄にすると共通Client IDに戻ります。
+            </div>
+            <input type="text" id="customClientIdInput" class="input-field" 
+                   placeholder="xxxxxx-xxxxxxxx.apps.googleusercontent.com"
+                   style="width: 100%; font-size: 11px; padding: 6px 8px; margin-bottom: 6px;">
+            <div style="display: flex; gap: 6px;">
+              <button id="customClientIdSaveBtn" class="btn btn-sm btn-primary" style="font-size: 11px;">💾 保存</button>
+              <button id="customClientIdClearBtn" class="btn btn-sm btn-ghost" style="font-size: 11px; color: var(--danger);">🗑️ クリア（デフォルトに戻す）</button>
+            </div>
+            <div style="font-size: 10px; color: var(--text-faint); margin-top: 6px;">
+              ※ この設定はこのブラウザにのみ保存されます（localStorage）。
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     
@@ -2626,10 +2667,27 @@
     // 未設定警告
     const warning = document.getElementById('oauthSetupWarning');
     if (warning) {
-      if (!GOOGLE_OAUTH_CLIENT_ID || GOOGLE_OAUTH_CLIENT_ID === 'YOUR_OAUTH_CLIENT_ID_HERE') {
+      const effectiveId = getEffectiveOAuthClientId();
+      if (!effectiveId || effectiveId === 'YOUR_OAUTH_CLIENT_ID_HERE') {
         warning.style.display = 'block';
       } else {
         warning.style.display = 'none';
+      }
+    }
+    // 自分専用Client ID入力欄の値を反映
+    const customClientIdInput = document.getElementById('customClientIdInput');
+    if (customClientIdInput) {
+      customClientIdInput.value = localStorage.getItem('analyzer_user_oauth_client_id') || '';
+    }
+    // 自分専用Client ID使用中ステータス
+    const customClientIdStatus = document.getElementById('customClientIdStatus');
+    if (customClientIdStatus) {
+      if (isUsingCustomClientId()) {
+        customClientIdStatus.innerHTML = '✅ <b>自分専用Client ID</b>で連携します';
+        customClientIdStatus.style.color = 'var(--accent-teal)';
+      } else {
+        customClientIdStatus.innerHTML = '🔵 デフォルト（共通Client ID）で連携します';
+        customClientIdStatus.style.color = 'var(--text-muted)';
       }
     }
     // OAuth状態
@@ -2926,18 +2984,19 @@
       console.log('[OAuth] Google Identity Services 未ロード、サイレント更新スキップ');
       return false;
     }
-    if (!GOOGLE_OAUTH_CLIENT_ID || GOOGLE_OAUTH_CLIENT_ID === 'YOUR_OAUTH_CLIENT_ID_HERE') {
+    const effectiveClientId = getEffectiveOAuthClientId();
+    if (!effectiveClientId || effectiveClientId === 'YOUR_OAUTH_CLIENT_ID_HERE') {
       return false;
     }
     
     _silentRefreshInProgress = true;
-    console.log('[OAuth] サイレント更新を試行...');
+    console.log('[OAuth] サイレント更新を試行... (Client ID: ' + (isUsingCustomClientId() ? '自分専用' : 'デフォルト') + ')');
     
     return new Promise((resolve) => {
       let timeoutId = null;
       try {
         const tokenClient = google.accounts.oauth2.initTokenClient({
-          client_id: GOOGLE_OAUTH_CLIENT_ID,
+          client_id: effectiveClientId,
           scope: YT_ANALYTICS_SCOPES,
           prompt: '', // ★これが肝：ダイアログを出さない
           callback: async (response) => {
@@ -3045,13 +3104,15 @@
       if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
         throw new Error('Google Identity Services が読み込まれていません。しばらく待ってから再試行してください');
       }
-      if (!GOOGLE_OAUTH_CLIENT_ID || GOOGLE_OAUTH_CLIENT_ID === 'YOUR_OAUTH_CLIENT_ID_HERE') {
+      const effectiveClientId = getEffectiveOAuthClientId();
+      if (!effectiveClientId || effectiveClientId === 'YOUR_OAUTH_CLIENT_ID_HERE') {
         throw new Error('OAuth クライアントIDが未設定です。Google Cloud Console > 認証情報 からWebクライアントIDを確認し、analyzer.htmlに貼り付けてください');
       }
+      console.log('[OAuth] ログイン試行中... (Client ID: ' + (isUsingCustomClientId() ? '自分専用' : 'デフォルト') + ')');
       
       await new Promise((resolve, reject) => {
         const tokenClient = google.accounts.oauth2.initTokenClient({
-          client_id: GOOGLE_OAUTH_CLIENT_ID,
+          client_id: effectiveClientId,
           scope: YT_ANALYTICS_SCOPES,
           prompt: 'consent',
           callback: async (response) => {
@@ -3094,6 +3155,79 @@
     updateSettingsModal();
     alert('連携を解除しました');
   });
+  
+  // ==== 自分専用 Client ID 設定 ====
+  // 折りたたみトグル
+  const customClientIdToggle = document.getElementById('customClientIdToggle');
+  if (customClientIdToggle) {
+    customClientIdToggle.addEventListener('click', () => {
+      const panel = document.getElementById('customClientIdPanel');
+      if (panel) {
+        const isOpen = panel.style.display === 'block';
+        panel.style.display = isOpen ? 'none' : 'block';
+        customClientIdToggle.textContent = isOpen ? '▼ 自分専用Client ID（高度な設定）' : '▲ 自分専用Client ID（高度な設定）';
+      }
+    });
+  }
+  
+  // 保存ボタン
+  const customClientIdSaveBtn = document.getElementById('customClientIdSaveBtn');
+  if (customClientIdSaveBtn) {
+    customClientIdSaveBtn.addEventListener('click', async () => {
+      const input = document.getElementById('customClientIdInput');
+      const value = (input?.value || '').trim();
+      if (!value) {
+        alert('Client IDを入力してください。\n（クリアしたい場合は「クリア」ボタンを押してください）');
+        return;
+      }
+      if (!value.endsWith('.apps.googleusercontent.com')) {
+        alert('⚠️ Client IDの形式が正しくありません。\n\n正しい形式：\nxxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com');
+        return;
+      }
+      // 念のため確認
+      if (!confirm(
+        `自分専用Client IDを保存します：\n\n${value.slice(0, 50)}...\n\n`
+        + `※ 既にOAuth連携している場合は一度解除されます。\n`
+        + `※ この設定はこのブラウザのみに保存されます。\n\n`
+        + `保存しますか？`
+      )) return;
+      
+      // 既存のトークンをクリア（別Client IDになるので無効）
+      oauthAccessToken = null;
+      oauthTokenExpireAt = 0;
+      oauthMyChannelId = null;
+      saveOAuthState();
+      localStorage.removeItem('analyzer_oauth_channel');
+      if (_refreshTimerId) { clearTimeout(_refreshTimerId); _refreshTimerId = null; }
+      
+      // 新しいClient IDを保存
+      localStorage.setItem('analyzer_user_oauth_client_id', value);
+      updateSettingsModal();
+      alert('✅ 保存しました！\n「🔐 YouTube連携」ボタンを押して連携を試してください。');
+    });
+  }
+  
+  // クリアボタン
+  const customClientIdClearBtn = document.getElementById('customClientIdClearBtn');
+  if (customClientIdClearBtn) {
+    customClientIdClearBtn.addEventListener('click', () => {
+      if (!confirm('自分専用Client IDをクリアしてデフォルト（共通Client ID）に戻しますか？\n\n※ 既にOAuth連携している場合は一度解除されます。')) return;
+      
+      // 既存のトークンをクリア
+      oauthAccessToken = null;
+      oauthTokenExpireAt = 0;
+      oauthMyChannelId = null;
+      saveOAuthState();
+      localStorage.removeItem('analyzer_oauth_channel');
+      if (_refreshTimerId) { clearTimeout(_refreshTimerId); _refreshTimerId = null; }
+      
+      localStorage.removeItem('analyzer_user_oauth_client_id');
+      const input = document.getElementById('customClientIdInput');
+      if (input) input.value = '';
+      updateSettingsModal();
+      alert('✅ デフォルトに戻しました。');
+    });
+  }
   
   // タブが再表示された時、トークンが切れかけていたら裏で更新
   // （PCをスリープから起こした、別タブから戻ってきた、などのケースで切れていることがある）
