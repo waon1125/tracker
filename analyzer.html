@@ -1208,9 +1208,11 @@
           </div>
           <!-- 3行目：色分けON時のみ表示する尺バケット選択チップ -->
           <div class="graph-bucket-chips" data-graph-bucket-chips="${tabKey}" style="display: none; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; padding: 6px 8px; background: var(--dim-bg); border-radius: 8px;">
-            <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">🎨 尺枠:</span>
+            <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;" data-graph-chip-label="${tabKey}">🎨 ${BUCKET_MODES[loadBucketMode(tabKey)].label.replace(/^[^ ]+ /, '')}:</span>
+            <span data-graph-chip-list="${tabKey}">
             ${(() => {
-              const bks = loadDurationBuckets(tabKey);
+              const mode = loadBucketMode(tabKey);
+              const bks = loadBuckets(tabKey, mode);
               const sel = durationPeriodState[tabKey].selectedBuckets;
               const chip = (key, label, color) => {
                 const isActive = sel.has(key);
@@ -1218,12 +1220,23 @@
                 const fg = isActive ? '#fff' : 'var(--text)';
                 const border = `2px solid ${color}`;
                 const opacity = isActive ? '1' : '0.55';
-                return `<button class="bucket-chip" data-bucket-chip-tab="${tabKey}" data-bucket-chip-key="${key}" style="font-size: 11px; padding: 3px 10px; border-radius: 14px; background: ${bg}; color: ${fg}; border: ${border}; opacity: ${opacity}; font-weight: 700; cursor: pointer;">${label}</button>`;
+                return `<button class="bucket-chip" data-bucket-chip-tab="${tabKey}" data-bucket-chip-key="${key}" data-bucket-chip-color="${color}" style="font-size: 11px; padding: 3px 10px; border-radius: 14px; background: ${bg}; color: ${fg}; border: ${border}; opacity: ${opacity}; font-weight: 700; cursor: pointer;">${label}</button>`;
               };
-              const chips = bks.map(b => chip(b.key, bucketLabel(b), BUCKET_COLORS[b.key] || '#888')).join('');
-              const totalChip = chip('total', '10:00〜40:00 合計', BUCKET_COLORS.b0); // accent_teal っぽい色がいいけど合計はとりあえず青系
+              const chips = bks.map(b => chip(b.key, bucketLabel(b, mode), BUCKET_COLORS[b.key] || '#888')).join('');
+              // 合計バケットのラベルも動的に
+              const firstFive = bks.slice(0, 5);
+              const totalMin = firstFive[0]?.min ?? 0;
+              const totalMax = firstFive[firstFive.length - 1]?.max ?? Infinity;
+              let totalLabel;
+              if (mode === 'retention') {
+                totalLabel = `${totalMin}〜${totalMax}% 合計`;
+              } else {
+                totalLabel = `${bucketValueLabel(totalMin, mode)}〜${bucketValueLabel(totalMax, mode)} 合計`;
+              }
+              const totalChip = chip('total', totalLabel, BUCKET_COLORS.b0);
               return chips + totalChip;
             })()}
+            </span>
             <span style="flex: 1;"></span>
             <button class="btn btn-sm" data-bucket-select-all="${tabKey}" style="font-size: 11px; padding: 3px 8px;">✅ 全選</button>
             <button class="btn btn-sm btn-ghost" data-bucket-deselect-all="${tabKey}" style="font-size: 11px; padding: 3px 8px;">⬜ 全解</button>
@@ -1249,10 +1262,17 @@
           <p class="hint">💡 デフォルトは3分超の通常動画のみ取得。ショート（3分以下）・ライブ・ライブアーカイブは自動除外。大量取得（50本以上）はAPI制限に注意</p>
         </div>
         <div class="section">
-          <h3 class="section-title" style="display: flex; align-items: center; gap: 8px;">
-            <span>⏱️ 動画尺別の平均再生数</span>
-            <button class="btn btn-sm btn-ghost" data-bucket-edit-tab="${tabKey}" title="時間枠を編集" style="font-size: 14px; padding: 2px 8px;">⚙️</button>
+          <h3 class="section-title" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span data-bucket-section-title="${tabKey}">${BUCKET_MODES[loadBucketMode(tabKey)].label}の平均再生数</span>
+            <button class="btn btn-sm btn-ghost" data-bucket-edit-tab="${tabKey}" title="バケットを編集" style="font-size: 14px; padding: 2px 8px;">⚙️</button>
           </h3>
+          <div class="bucket-mode-switcher" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; align-items: center; padding: 6px 8px; background: var(--dim-bg); border-radius: 8px;">
+            <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">🔀 集計軸:</span>
+            <button class="btn btn-sm bucket-mode-btn ${loadBucketMode(tabKey) === 'duration' ? 'active' : ''}" data-bucket-mode="duration" data-bucket-mode-tab="${tabKey}">📏 動画尺別</button>
+            <button class="btn btn-sm bucket-mode-btn ${loadBucketMode(tabKey) === 'avgViewDuration' ? 'active' : ''}" data-bucket-mode="avgViewDuration" data-bucket-mode-tab="${tabKey}">⏱️ 平均視聴時間別</button>
+            <button class="btn btn-sm bucket-mode-btn ${loadBucketMode(tabKey) === 'retention' ? 'active' : ''}" data-bucket-mode="retention" data-bucket-mode-tab="${tabKey}">📊 維持率別</button>
+            <span style="font-size: 10px; color: var(--text-faint); margin-left: 4px;" data-bucket-mode-hint="${tabKey}">${BUCKET_MODES[loadBucketMode(tabKey)].hint}</span>
+          </div>
           <p class="hint" style="margin-bottom: 8px;">💡 各動画の最新スナップショットの再生数をもとに集計（通常動画のみ／ショート・ライブ除外）</p>
           <div class="duration-period-controls" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; align-items: center;">
             <span style="font-size: 11px; color: var(--text-muted); margin-right: 4px;">📅期間:</span>
@@ -1874,32 +1894,42 @@
 
   // ==== 尺別の平均再生数集計 ====
   function renderDurationStatsHtml(list, opts = {}) {
-    // 通常動画のみ（ショート・ライブ・ライブアーカイブ除外）
-    let normalVids = list.filter(v => (v.videoKind || 'normal') === 'normal');
+    const tabKey = opts.tabKey || null; // 'copi'|'waon'
+    const mode = opts.mode || (tabKey ? loadBucketMode(tabKey) : 'duration');
+    const modeDef = BUCKET_MODES[mode] || BUCKET_MODES.duration;
+    
+    // 集計対象動画のフィルタリング（モードによって変える）
+    let baseVids;
+    if (mode === 'duration') {
+      // 動画尺別：通常動画のみ（ショート・ライブ除外）
+      baseVids = list.filter(v => (v.videoKind || 'normal') === 'normal');
+    } else {
+      // 平均視聴時間別・維持率別：通常動画 + 該当データを持っているもの
+      baseVids = list.filter(v => (v.videoKind || 'normal') === 'normal');
+    }
     
     // 期間フィルター
-    const range = opts.range || null; // {fromMs, toMs}
-    const tabKey = opts.tabKey || null; // 'copi'|'waon'（チェックボックスID用）
+    const range = opts.range || null;
     const selectedBuckets = opts.selectedBuckets || new Set();
     let filteredOutByPeriod = 0;
     if (range) {
-      const before = normalVids.length;
-      normalVids = normalVids.filter(v => {
+      const before = baseVids.length;
+      baseVids = baseVids.filter(v => {
         const t = new Date(v.publishedAt).getTime();
         if (range.fromMs !== null && t < range.fromMs) return false;
         if (range.toMs !== null && t > range.toMs) return false;
         return true;
       });
-      filteredOutByPeriod = before - normalVids.length;
+      filteredOutByPeriod = before - baseVids.length;
     }
     
-    // タブごとのバケット設定を取得
-    const tabBuckets = tabKey ? loadDurationBuckets(tabKey) : DURATION_BUCKETS;
+    // タブ × モードごとのバケット設定を取得
+    const tabBuckets = tabKey ? loadBuckets(tabKey, mode) : BUCKET_MODES.duration.defaults.map((b,i) => ({key:'b'+i, ...b}));
     
     // 各バケットに動画を振り分けて集計
     const bucketStats = tabBuckets.map(b => ({
       key: b.key,
-      label: bucketLabel(b),
+      label: bucketLabel(b, mode),
       min: b.min,
       max: b.max,
       videos: [],
@@ -1910,12 +1940,22 @@
       isTotal: false
     }));
     
-    let outOfRangeCount = 0; // どのバケットにも該当しなかった本数
+    let outOfRangeCount = 0; // どのバケットにも該当しなかった本数（モードによって意味が変わる）
+    let noDataCount = 0; // データ未取得の動画
     
-    normalVids.forEach(v => {
-      const sec = isoToSeconds(v.duration);
-      // 10分未満や、どのバケットにも該当しない動画はカウント外
-      const matchedBucket = findBestBucket(sec, tabBuckets);
+    baseVids.forEach(v => {
+      // モードに応じて値を取得
+      const value = modeDef.getValueFromVideo(v);
+      if (value === null || value === undefined) {
+        // モード別の値が取れない動画
+        if (mode === 'duration') {
+          outOfRangeCount++;
+        } else {
+          noDataCount++;
+        }
+        return;
+      }
+      const matchedBucket = findBestBucket(value, tabBuckets);
       if (!matchedBucket) { outOfRangeCount++; return; }
       const bucketIdx = bucketStats.findIndex(b => b.key === matchedBucket.key);
       if (bucketIdx === -1) return;
@@ -1924,7 +1964,7 @@
         : null;
       if (!lastSnap) return;
       const views = lastSnap.views || 0;
-      bucketStats[bucketIdx].videos.push({ title: v.title, views, duration: v.duration });
+      bucketStats[bucketIdx].videos.push({ title: v.title, views, value });
       bucketStats[bucketIdx].totalViews += views;
     });
     
@@ -1939,9 +1979,14 @@
     
     // 「○○〜○○」合計バケット（先頭5バケット＝最後の "○○〜" 以外の合計）
     const firstFive = bucketStats.slice(0, 5);
-    const totalMin = firstFive[0]?.min ?? 600;
-    const totalMaxRaw = firstFive[firstFive.length - 1]?.max ?? 2400;
-    const totalLabel = `${secondsToLabel(totalMin)}〜${secondsToLabel(totalMaxRaw)}`;
+    const totalMin = firstFive[0]?.min ?? 0;
+    const totalMaxRaw = firstFive[firstFive.length - 1]?.max ?? Infinity;
+    let totalLabel;
+    if (mode === 'retention') {
+      totalLabel = `${totalMin}〜${totalMaxRaw}%`;
+    } else {
+      totalLabel = `${bucketValueLabel(totalMin, mode)}〜${bucketValueLabel(totalMaxRaw, mode)}`;
+    }
     const totalBucket = {
       key: 'total',
       label: totalLabel,
@@ -1963,14 +2008,16 @@
     }
     bucketStats.push(totalBucket);
     
-    // 全体での最大平均（バーグラフのスケール用、合計バケットは除外）
     const maxAvg = Math.max(...bucketStats.filter(b => !b.isTotal).map(b => b.avgViews), 1);
     const totalCounted = bucketStats.filter(b => !b.isTotal).reduce((sum, b) => sum + b.videos.length, 0);
     
     if (totalCounted === 0) {
-      const emptyMsg = range
-        ? '指定した期間内に該当する動画がありません'
-        : '10分以上の通常動画がまだありません';
+      let emptyMsg;
+      if (range && filteredOutByPeriod > 0) emptyMsg = '指定した期間内に該当する動画がありません';
+      else if (mode === 'duration') emptyMsg = '10分以上の通常動画がまだありません';
+      else if (mode === 'avgViewDuration') emptyMsg = '平均視聴時間データのある動画がありません（OAuth連携で詳細データ取得が必要）';
+      else if (mode === 'retention') emptyMsg = '維持率データのある動画がありません（OAuth連携で詳細データ取得が必要）';
+      else emptyMsg = '該当する動画がありません';
       return `<div class="empty-state" style="padding: 20px;">
         <div class="empty-text">${emptyMsg}</div>
       </div>`;
@@ -1987,7 +2034,6 @@
              <div><span style="color: var(--accent-pink); font-weight: 800;">max</span> <span style="color: var(--text);">${b.maxViews.toLocaleString()}</span></div>
            </div>`
         : '';
-      // 合計行は色・区切りで区別する
       const isTotal = b.isTotal;
       const rowExtraStyle = isTotal
         ? 'border-top: 2px solid var(--accent-teal); margin-top: 4px; padding-top: 12px; background: var(--dim-bg); border-radius: 6px;'
@@ -1996,7 +2042,7 @@
       const barColor = isTotal ? 'var(--accent-teal)' : 'var(--accent-pink)';
       const isChecked = selectedBuckets.has(b.key);
       const checkboxHtml = tabKey
-        ? `<label style="display: flex; align-items: center; cursor: pointer;" title="この尺枠の動画だけ表示">
+        ? `<label style="display: flex; align-items: center; cursor: pointer;" title="このバケットの動画だけ表示">
              <input type="checkbox" class="duration-bucket-check" data-bucket-tab="${tabKey}" data-bucket-key="${b.key}" ${isChecked ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px;">
            </label>`
         : '';
@@ -2018,7 +2064,11 @@
     
     const notes = [];
     notes.push(`集計対象 ${totalCounted}本`);
-    if (outOfRangeCount > 0) notes.push(`10分未満${outOfRangeCount}本は除外`);
+    if (outOfRangeCount > 0) {
+      if (mode === 'duration') notes.push(`10分未満${outOfRangeCount}本は除外`);
+      else notes.push(`バケット範囲外${outOfRangeCount}本は除外`);
+    }
+    if (noDataCount > 0) notes.push(`詳細データなし${noDataCount}本は除外`);
     if (filteredOutByPeriod > 0) notes.push(`期間外${filteredOutByPeriod}本は除外`);
     const noteText = `<div style="font-size: 11px; color: var(--text-muted); margin-top: 8px;">💡 ${notes.join('／')}</div>`;
     
@@ -2047,7 +2097,9 @@
     // バケットフィルター（チェックが1つでもあれば適用、なければスキップ＝全表示）
     const selected = state.selectedBuckets;
     if (selected && selected.size > 0) {
-      const tabBuckets = tabKey ? loadDurationBuckets(tabKey) : DURATION_BUCKETS;
+      const mode = tabKey ? loadBucketMode(tabKey) : 'duration';
+      const modeDef = BUCKET_MODES[mode] || BUCKET_MODES.duration;
+      const tabBuckets = tabKey ? loadBuckets(tabKey, mode) : DURATION_BUCKETS;
       // 'total' はその他のバケットと等価（先頭5つ）なので展開する
       const expandedKeys = new Set();
       selected.forEach(k => {
@@ -2055,11 +2107,12 @@
         else expandedKeys.add(k);
       });
       filtered = filtered.filter(v => {
-        // 通常動画でなければ除外（尺バケット選択中はショート/ライブも非表示）
+        // 通常動画でなければ除外
         if ((v.videoKind || 'normal') !== 'normal') return false;
-        const sec = isoToSeconds(v.duration);
-        // 該当バケットを判定（最も狭い区間にマッチ）
-        const bucket = findBestBucket(sec, tabBuckets);
+        // モードに応じて値を取得
+        const value = modeDef.getValueFromVideo(v);
+        if (value === null) return false; // データなしは除外
+        const bucket = findBestBucket(value, tabBuckets);
         return bucket ? expandedKeys.has(bucket.key) : false;
       });
     }
@@ -2246,7 +2299,33 @@
     // バケットチェックボックスのハンドラ
     attachBucketCheckboxHandlers(tabKey);
     
-    // ⚙️時間枠編集ボタン
+    // 🔀 バケットモード切替ボタン
+    document.querySelectorAll(`.bucket-mode-btn[data-bucket-mode-tab="${tabKey}"]`).forEach(btn => {
+      btn.addEventListener('click', () => {
+        const newMode = btn.dataset.bucketMode;
+        const currentMode = loadBucketMode(tabKey);
+        if (newMode === currentMode) return;
+        saveBucketMode(tabKey, newMode);
+        // モード切替時はバケット選択をクリア（モードごとに意味が違うため）
+        state.selectedBuckets = new Set();
+        // アクティブボタンの切替
+        document.querySelectorAll(`.bucket-mode-btn[data-bucket-mode-tab="${tabKey}"]`).forEach(b => {
+          b.classList.toggle('active', b.dataset.bucketMode === newMode);
+        });
+        // セクションタイトル更新
+        const titleEl = document.querySelector(`[data-bucket-section-title="${tabKey}"]`);
+        if (titleEl) titleEl.textContent = `${BUCKET_MODES[newMode].label}の平均再生数`;
+        // ヒント更新
+        const hintEl = document.querySelector(`[data-bucket-mode-hint="${tabKey}"]`);
+        if (hintEl) hintEl.textContent = BUCKET_MODES[newMode].hint;
+        // グラフ上のバケットチップを再生成（モードによりバケット内容が変わるため）
+        rebuildBucketChips(tabKey);
+        // 統計とグラフを再描画
+        rerenderDurationStats(tabKey);
+      });
+    });
+    
+    // ⚙️バケット編集ボタン
     const editBtn = document.querySelector(`[data-bucket-edit-tab="${tabKey}"]`);
     if (editBtn) {
       editBtn.onclick = () => openBucketEditor(tabKey);
@@ -2288,8 +2367,10 @@
   function openBucketEditor(tabKey) {
     _bucketEditCurrentTab = tabKey;
     const tabLabel = tabKey === 'copi' ? '🌙 コピプラネット' : '🍁 和音GAMES';
-    document.getElementById('bucketEditModalTab').textContent = '（' + tabLabel + '）';
-    renderBucketEditList(loadDurationBuckets(tabKey));
+    const mode = loadBucketMode(tabKey);
+    const modeLabel = BUCKET_MODES[mode].label;
+    document.getElementById('bucketEditModalTab').textContent = '（' + tabLabel + ' / ' + modeLabel + '）';
+    renderBucketEditList(loadBuckets(tabKey, mode), mode);
     document.getElementById('bucketEditModal').classList.add('show');
   }
   
@@ -2298,56 +2379,94 @@
     _bucketEditCurrentTab = null;
   }
   
-  function renderBucketEditList(buckets) {
+  function renderBucketEditList(buckets, mode) {
+    mode = mode || 'duration';
     const list = document.getElementById('bucketEditList');
-    // 入力欄の共通スタイル（input-fieldのmin-width:220pxとflex:1を上書き）
     const inputStyle = 'width: 56px; min-width: 0; flex: 0 0 auto; padding: 4px; text-align: center; font-size: 14px;';
+    
     list.innerHTML = buckets.map((b, i) => {
-      const minM = Math.floor(b.min / 60);
-      const minS = b.min % 60;
       const isLast = (i === buckets.length - 1);
-      const maxM = b.max === Infinity ? '' : Math.floor((b.max - 1) / 60);
-      const maxS = b.max === Infinity ? '' : ((b.max - 1) % 60);
-      return `
-        <div class="bucket-edit-row" data-row-idx="${i}" style="display: flex; align-items: center; gap: 6px; padding: 8px; background: var(--dim-bg); border-radius: 8px; flex-wrap: nowrap;">
-          <div style="font-weight: 800; color: var(--text-muted); width: 28px; flex-shrink: 0;">[${i + 1}]</div>
-          <input type="number" min="0" max="99" class="input-field bucket-min-m" value="${minM}" style="${inputStyle}">
-          <span style="font-weight: 800; flex-shrink: 0;">:</span>
-          <input type="number" min="0" max="59" class="input-field bucket-min-s" value="${minS}" style="${inputStyle}">
-          <span style="font-weight: 800; color: var(--text-muted); flex-shrink: 0; margin: 0 4px;">〜</span>
-          ${isLast 
-            ? `<span style="font-size: 12px; color: var(--text-faint); font-style: italic; white-space: nowrap; flex-shrink: 0;">（終了なし）</span>` 
-            : `<input type="number" min="0" max="99" class="input-field bucket-max-m" value="${maxM}" style="${inputStyle}">
-               <span style="font-weight: 800; flex-shrink: 0;">:</span>
-               <input type="number" min="0" max="59" class="input-field bucket-max-s" value="${maxS}" style="${inputStyle}">`
-          }
-          <div style="font-size: 11px; color: var(--text-muted); margin-left: auto; flex-shrink: 0; white-space: nowrap;">分:秒</div>
-        </div>
-      `;
+      
+      if (mode === 'retention') {
+        // 維持率モード：単純な % 入力
+        const minPct = b.min;
+        const maxPct = b.max === Infinity ? '' : b.max;
+        return `
+          <div class="bucket-edit-row" data-row-idx="${i}" style="display: flex; align-items: center; gap: 6px; padding: 8px; background: var(--dim-bg); border-radius: 8px; flex-wrap: nowrap;">
+            <div style="font-weight: 800; color: var(--text-muted); width: 28px; flex-shrink: 0;">[${i + 1}]</div>
+            <input type="number" min="0" max="100" step="0.1" class="input-field bucket-min-pct" value="${minPct}" style="${inputStyle}">
+            <span style="font-weight: 800; flex-shrink: 0;">%</span>
+            <span style="font-weight: 800; color: var(--text-muted); flex-shrink: 0; margin: 0 4px;">〜</span>
+            ${isLast 
+              ? `<span style="font-size: 12px; color: var(--text-faint); font-style: italic; white-space: nowrap; flex-shrink: 0;">（終了なし）</span>` 
+              : `<input type="number" min="0" max="100" step="0.1" class="input-field bucket-max-pct" value="${maxPct}" style="${inputStyle}">
+                 <span style="font-weight: 800; flex-shrink: 0;">%</span>`
+            }
+            <div style="font-size: 11px; color: var(--text-muted); margin-left: auto; flex-shrink: 0; white-space: nowrap;">維持率</div>
+          </div>
+        `;
+      } else {
+        // 秒単位モード（duration / avgViewDuration）
+        const minM = Math.floor(b.min / 60);
+        const minS = b.min % 60;
+        const maxM = b.max === Infinity ? '' : Math.floor((b.max - 1) / 60);
+        const maxS = b.max === Infinity ? '' : ((b.max - 1) % 60);
+        return `
+          <div class="bucket-edit-row" data-row-idx="${i}" style="display: flex; align-items: center; gap: 6px; padding: 8px; background: var(--dim-bg); border-radius: 8px; flex-wrap: nowrap;">
+            <div style="font-weight: 800; color: var(--text-muted); width: 28px; flex-shrink: 0;">[${i + 1}]</div>
+            <input type="number" min="0" max="99" class="input-field bucket-min-m" value="${minM}" style="${inputStyle}">
+            <span style="font-weight: 800; flex-shrink: 0;">:</span>
+            <input type="number" min="0" max="59" class="input-field bucket-min-s" value="${minS}" style="${inputStyle}">
+            <span style="font-weight: 800; color: var(--text-muted); flex-shrink: 0; margin: 0 4px;">〜</span>
+            ${isLast 
+              ? `<span style="font-size: 12px; color: var(--text-faint); font-style: italic; white-space: nowrap; flex-shrink: 0;">（終了なし）</span>` 
+              : `<input type="number" min="0" max="99" class="input-field bucket-max-m" value="${maxM}" style="${inputStyle}">
+                 <span style="font-weight: 800; flex-shrink: 0;">:</span>
+                 <input type="number" min="0" max="59" class="input-field bucket-max-s" value="${maxS}" style="${inputStyle}">`
+            }
+            <div style="font-size: 11px; color: var(--text-muted); margin-left: auto; flex-shrink: 0; white-space: nowrap;">分:秒</div>
+          </div>
+        `;
+      }
     }).join('');
   }
   
-  // 編集UIから現在の値を読み取って配列にする
-  function readBucketEditValues() {
+  // 編集UIから現在の値を読み取って配列にする（モード対応）
+  function readBucketEditValues(mode) {
+    mode = mode || 'duration';
     const rows = document.querySelectorAll('.bucket-edit-row');
     const result = [];
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const isLast = (i === rows.length - 1);
-      const minM = parseInt(row.querySelector('.bucket-min-m').value) || 0;
-      const minS = parseInt(row.querySelector('.bucket-min-s').value) || 0;
-      const min = minM * 60 + minS;
-      let max;
-      if (isLast) {
-        max = Infinity;
+      let min, max;
+      
+      if (mode === 'retention') {
+        const minInput = row.querySelector('.bucket-min-pct');
+        min = parseFloat(minInput.value) || 0;
+        if (isLast) {
+          max = Infinity;
+        } else {
+          const maxInput = row.querySelector('.bucket-max-pct');
+          max = parseFloat(maxInput.value) || 0;
+        }
+        if (max <= min) {
+          return { error: `区間[${i + 1}]: 開始(${min}%)が終了より大きい、もしくは等しいです` };
+        }
       } else {
-        const maxM = parseInt(row.querySelector('.bucket-max-m').value) || 0;
-        const maxS = parseInt(row.querySelector('.bucket-max-s').value) || 0;
-        // 終了は「次の秒の手前まで」なので+1する（例: 14:59 → 15:00）
-        max = maxM * 60 + maxS + 1;
-      }
-      if (max <= min) {
-        return { error: `区間[${i + 1}]: 開始(${secondsToLabel(min)})が終了より大きい、もしくは等しいです` };
+        const minM = parseInt(row.querySelector('.bucket-min-m').value) || 0;
+        const minS = parseInt(row.querySelector('.bucket-min-s').value) || 0;
+        min = minM * 60 + minS;
+        if (isLast) {
+          max = Infinity;
+        } else {
+          const maxM = parseInt(row.querySelector('.bucket-max-m').value) || 0;
+          const maxS = parseInt(row.querySelector('.bucket-max-s').value) || 0;
+          max = maxM * 60 + maxS + 1;
+        }
+        if (max <= min) {
+          return { error: `区間[${i + 1}]: 開始(${secondsToLabel(min)})が終了より大きい、もしくは等しいです` };
+        }
       }
       result.push({ key: 'b' + i, min, max });
     }
@@ -2357,9 +2476,10 @@
   function saveBucketEdit() {
     const tabKey = _bucketEditCurrentTab;
     if (!tabKey) return;
-    const r = readBucketEditValues();
+    const mode = loadBucketMode(tabKey);
+    const r = readBucketEditValues(mode);
     if (r.error) { alert('⚠️ ' + r.error); return; }
-    saveDurationBuckets(tabKey, r.buckets);
+    saveBuckets(tabKey, mode, r.buckets);
     closeBucketEditor();
     // 再描画（タブ全体）
     if (currentTab === tabKey) {
@@ -2368,8 +2488,21 @@
   }
   
   function resetBucketEdit() {
-    if (!confirm('時間枠をデフォルト値（10/15/20/25/30/40）にリセットしますか？')) return;
-    renderBucketEditList(DEFAULT_DURATION_BUCKETS.map(b => ({ ...b })));
+    const tabKey = _bucketEditCurrentTab;
+    if (!tabKey) return;
+    const mode = loadBucketMode(tabKey);
+    const def = BUCKET_MODES[mode] || BUCKET_MODES.duration;
+    const defaultBuckets = def.defaults.map((b, i) => ({ key: 'b' + i, ...b }));
+    let confirmMsg;
+    if (mode === 'retention') {
+      confirmMsg = 'バケットをデフォルト値（20/30/40/50/60/70%）にリセットしますか？';
+    } else if (mode === 'avgViewDuration') {
+      confirmMsg = 'バケットをデフォルト値（2/4/6/8/10/12分）にリセットしますか？';
+    } else {
+      confirmMsg = '時間枠をデフォルト値（10/15/20/25/30/40分）にリセットしますか？';
+    }
+    if (!confirm(confirmMsg)) return;
+    renderBucketEditList(defaultBuckets, mode);
   }
   
   function renderVideoListHtml(list, sortState) {
@@ -3625,9 +3758,11 @@
       totalCount = filtered.length;
       const points = [];
       
-      // 色分けONかつ tabKey が copi/waon の時のみ尺バケット情報を引く
+      // 色分けONかつ tabKey が copi/waon の時のみバケット情報を引く
       const colorByBucket = state.colorByBucket && (tabKey === 'copi' || tabKey === 'waon');
-      const tabBuckets = colorByBucket ? loadDurationBuckets(tabKey) : null;
+      const currentMode = colorByBucket ? loadBucketMode(tabKey) : 'duration';
+      const modeDef = colorByBucket ? BUCKET_MODES[currentMode] : null;
+      const tabBuckets = colorByBucket ? loadBuckets(tabKey, currentMode) : null;
       const selectedBuckets = colorByBucket ? (durationPeriodState[tabKey]?.selectedBuckets || new Set()) : null;
       const hasSelection = selectedBuckets && selectedBuckets.size > 0;
       
@@ -3640,9 +3775,12 @@
         let pointColor = accent;
         if (colorByBucket && tabBuckets) {
           if ((v.videoKind || 'normal') === 'normal') {
-            const sec = isoToSeconds(v.duration);
-            const matched = findBestBucket(sec, tabBuckets);
-            if (matched) bucketKey = matched.key;
+            // モードに応じた値で判定
+            const value = modeDef.getValueFromVideo(v);
+            if (value !== null) {
+              const matched = findBestBucket(value, tabBuckets);
+              if (matched) bucketKey = matched.key;
+            }
           }
           // 「チェックなし＝単一ピンク（accent）」「チェックあり＝該当だけ色付き、他はグレー」
           if (hasSelection) {
@@ -3903,7 +4041,8 @@
       const bucketAverageDatasets = [];
       let bucketLegendItems = [];
       if (colorByBucket && sorted.length > 0) {
-        const tabBuckets = loadDurationBuckets(tabKey);
+        const currentMode = loadBucketMode(tabKey);
+        const tabBuckets = loadBuckets(tabKey, currentMode);
         const selectedBuckets = durationPeriodState[tabKey]?.selectedBuckets || new Set();
         const hasSelection = selectedBuckets.size > 0;
         // チェックなしの場合は平均ライン無し（単一ピンク表示にとどめる）
@@ -3919,32 +4058,32 @@
             if (p.bucketKey) {
               if (!bucketSums[p.bucketKey]) bucketSums[p.bucketKey] = { sum: 0, count: 0 };
               bucketSums[p.bucketKey].sum += p.y;
-              bucketSums[p.bucketKey].count++;
+              bucketSums[p.bucketKey].count += 1;
             }
           });
-          // 各バケットを別datasetとして横線を描画
           for (const b of tabBuckets) {
             if (!expanded.has(b.key)) continue; // 選択外スキップ
             const stat = bucketSums[b.key];
             if (!stat || stat.count === 0) continue;
             const avg = Math.round(stat.sum / stat.count);
             const color = BUCKET_COLORS[b.key] || accent;
-          // 各棒の位置に同じ平均値を持つラインを引く（folioscale 全幅）
-          bucketAverageDatasets.push({
-            type: 'line',
-            label: `${bucketLabel(b)} 平均: ${avg.toLocaleString()}`,
-            data: sorted.map(() => avg),
-            borderColor: color,
-            backgroundColor: color,
-            borderWidth: 2,
-            borderDash: [8, 4],
-            pointRadius: 0,
-            pointHoverRadius: 0,
-            tension: 0,
-            fill: false,
-            order: 0 // 棒の上に表示
-          });
-          bucketLegendItems.push({ key: b.key, label: bucketLabel(b), color, avg, count: stat.count });
+            const bLabel = bucketLabel(b, currentMode);
+            // 各棒の位置に同じ平均値を持つラインを引く（全幅）
+            bucketAverageDatasets.push({
+              type: 'line',
+              label: `${bLabel} 平均: ${avg.toLocaleString()}`,
+              data: sorted.map(() => avg),
+              borderColor: color,
+              backgroundColor: color,
+              borderWidth: 2,
+              borderDash: [8, 4],
+              pointRadius: 0,
+              pointHoverRadius: 0,
+              tension: 0,
+              fill: false,
+              order: 0 // 棒の上に表示
+            });
+            bucketLegendItems.push({ key: b.key, label: bLabel, color, avg, count: stat.count });
           }
         }
       }
@@ -4061,14 +4200,48 @@
     document.querySelectorAll(`.bucket-chip[data-bucket-chip-tab="${tabKey}"]`).forEach(chip => {
       const key = chip.dataset.bucketChipKey;
       const isActive = sel.has(key);
-      // 元の色を data 属性から逆引きできないので、background-color / border-color を読み取る
-      const borderColor = chip.style.borderColor || chip.style.border?.match(/#[0-9a-fA-F]{6}/)?.[0];
-      const colorMatch = chip.style.border.match(/#[0-9a-fA-F]{6}|rgba?\([^)]+\)/);
-      const color = colorMatch ? colorMatch[0] : '#888';
+      // data-bucket-chip-color属性から正確な色を取得
+      const color = chip.dataset.bucketChipColor || '#888';
       chip.style.backgroundColor = isActive ? color : 'transparent';
       chip.style.color = isActive ? '#fff' : 'var(--text)';
       chip.style.opacity = isActive ? '1' : '0.55';
     });
+  }
+  
+  // バケットチップ行全体を再生成（モード切替時に呼ぶ）
+  function rebuildBucketChips(tabKey) {
+    const listEl = document.querySelector(`[data-graph-chip-list="${tabKey}"]`);
+    const labelEl = document.querySelector(`[data-graph-chip-label="${tabKey}"]`);
+    if (!listEl) return;
+    const mode = loadBucketMode(tabKey);
+    const bks = loadBuckets(tabKey, mode);
+    const sel = durationPeriodState[tabKey].selectedBuckets;
+    const chip = (key, label, color) => {
+      const isActive = sel.has(key);
+      const bg = isActive ? color : 'transparent';
+      const fg = isActive ? '#fff' : 'var(--text)';
+      const border = `2px solid ${color}`;
+      const opacity = isActive ? '1' : '0.55';
+      return `<button class="bucket-chip" data-bucket-chip-tab="${tabKey}" data-bucket-chip-key="${key}" data-bucket-chip-color="${color}" style="font-size: 11px; padding: 3px 10px; border-radius: 14px; background: ${bg}; color: ${fg}; border: ${border}; opacity: ${opacity}; font-weight: 700; cursor: pointer;">${label}</button>`;
+    };
+    const chips = bks.map(b => chip(b.key, bucketLabel(b, mode), BUCKET_COLORS[b.key] || '#888')).join('');
+    const firstFive = bks.slice(0, 5);
+    const totalMin = firstFive[0]?.min ?? 0;
+    const totalMax = firstFive[firstFive.length - 1]?.max ?? Infinity;
+    let totalLabel;
+    if (mode === 'retention') {
+      totalLabel = `${totalMin}〜${totalMax}% 合計`;
+    } else {
+      totalLabel = `${bucketValueLabel(totalMin, mode)}〜${bucketValueLabel(totalMax, mode)} 合計`;
+    }
+    const totalChip = chip('total', totalLabel, BUCKET_COLORS.b0);
+    listEl.innerHTML = chips + totalChip;
+    // ラベルも更新
+    if (labelEl) {
+      labelEl.textContent = `🎨 ${BUCKET_MODES[mode].label.replace(/^[^ ]+ /, '')}:`;
+    }
+    // ハンドラ再接続
+    attachBucketChipsHandlers(tabKey);
   }
   
   // 尺バケットチップのクリックハンドラ
@@ -4265,6 +4438,78 @@
     return h * 3600 + min * 60 + s;
   }
   
+  // ==== バケット分析モード（v4.9～） ====
+  // duration: 動画尺別（秒）、avgViewDuration: 平均視聴時間別（秒）、retention: 維持率別（%）
+  const BUCKET_MODES = {
+    duration: {
+      label: '📏 動画尺別',
+      unit: 'sec',                                  // 単位：秒
+      hint: '各動画の長さ',
+      getValueFromVideo: (v) => {
+        if (!v || (v.videoKind && v.videoKind !== 'normal')) return null;
+        const sec = isoToSeconds(v.duration);
+        return sec > 0 ? sec : null;
+      },
+      defaults: [
+        { min: 600,  max: 900   },
+        { min: 900,  max: 1200  },
+        { min: 1200, max: 1500  },
+        { min: 1500, max: 1800  },
+        { min: 1800, max: 2400  },
+        { min: 2400, max: Infinity }
+      ],
+      formatValue: (v) => secondsToLabel(Math.floor(v))
+    },
+    avgViewDuration: {
+      label: '⏱️ 平均視聴時間別',
+      unit: 'sec',
+      hint: '視聴者が平均何分視聴したか',
+      getValueFromVideo: (v) => {
+        if (!v || !v.analytics) return null;
+        const sec = v.analytics.averageViewDuration;
+        return (typeof sec === 'number' && sec > 0) ? sec : null;
+      },
+      defaults: [
+        { min: 0,    max: 120  },  // 2分未満
+        { min: 120,  max: 240  },  // 2-4分
+        { min: 240,  max: 360  },  // 4-6分
+        { min: 360,  max: 480  },  // 6-8分
+        { min: 480,  max: 600  },  // 8-10分
+        { min: 600,  max: Infinity }  // 10分以上
+      ],
+      formatValue: (v) => secondsToLabel(Math.floor(v))
+    },
+    retention: {
+      label: '📊 維持率別',
+      unit: 'pct',
+      hint: '視聴維持率（%）',
+      getValueFromVideo: (v) => {
+        if (!v || !v.analytics) return null;
+        const pct = v.analytics.averageViewPercentage;
+        return (typeof pct === 'number' && pct > 0) ? pct : null;
+      },
+      defaults: [
+        { min: 0,  max: 20  },
+        { min: 20, max: 30  },
+        { min: 30, max: 40  },
+        { min: 40, max: 50  },
+        { min: 50, max: 60  },
+        { min: 60, max: Infinity }
+      ],
+      formatValue: (v) => v.toFixed(1) + '%'
+    }
+  };
+  
+  // 現在のバケットモード（タブごと、localStorage）
+  function loadBucketMode(tabKey) {
+    return localStorage.getItem('analyzer_bucket_mode_' + tabKey) || 'duration';
+  }
+  function saveBucketMode(tabKey, mode) {
+    if (BUCKET_MODES[mode]) {
+      localStorage.setItem('analyzer_bucket_mode_' + tabKey, mode);
+    }
+  }
+  
   // 動画尺の区切り（秒）と表示ラベル
   // 10:00未満は集計対象外（短すぎる動画は別ジャンル扱い）
   // デフォルト値（リセット時に使用）
@@ -4285,51 +4530,84 @@
     return `${m}:${String(s).padStart(2, '0')}`;
   }
   
-  // バケットの表示ラベルを動的に生成
-  function bucketLabel(b) {
-    if (b.max === Infinity) {
-      return `${secondsToLabel(b.min)}〜`;
-    }
-    return `${secondsToLabel(b.min)}〜${secondsToLabel(b.max - 1)}`;
+  // モードに応じた値のフォーマット（min/maxラベル用）
+  function bucketValueLabel(value, mode) {
+    if (value === Infinity) return '∞';
+    const def = BUCKET_MODES[mode];
+    if (!def) return String(value);
+    if (def.unit === 'sec') return secondsToLabel(value);
+    if (def.unit === 'pct') return value + '%';
+    return String(value);
   }
   
-  // タブごとのバケット設定（localStorage連携）
+  // バケットの表示ラベルを動的に生成（モード対応）
+  function bucketLabel(b, mode) {
+    mode = mode || 'duration';
+    if (b.max === Infinity) {
+      return `${bucketValueLabel(b.min, mode)}〜`;
+    }
+    if (mode === 'retention') {
+      // 維持率は「20%〜29.9%」より「20〜30%未満」が分かりやすい
+      return `${b.min}〜${b.max}%`;
+    }
+    return `${bucketValueLabel(b.min, mode)}〜${bucketValueLabel(b.max - 1, mode)}`;
+  }
+  
+  // タブ + モードごとのバケット設定（localStorage連携、v4.9～）
   // 形式: [{ key, min, max }, ...] の配列。max=Infinityはnullで保存。
-  function loadDurationBuckets(tabKey) {
+  function loadBuckets(tabKey, mode) {
+    mode = mode || 'duration';
+    const def = BUCKET_MODES[mode];
+    if (!def) return DEFAULT_DURATION_BUCKETS.map(b => ({ ...b }));
+    const storageKey = mode === 'duration' 
+      ? 'analyzer_duration_buckets_' + tabKey  // 既存のkeyを維持（後方互換）
+      : 'analyzer_buckets_' + mode + '_' + tabKey;
     try {
-      const raw = localStorage.getItem('analyzer_duration_buckets_' + tabKey);
-      if (!raw) return DEFAULT_DURATION_BUCKETS.map(b => ({ ...b }));
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return def.defaults.map((b, i) => ({ key: 'b' + i, ...b }));
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed) || parsed.length !== 6) {
-        return DEFAULT_DURATION_BUCKETS.map(b => ({ ...b }));
+        return def.defaults.map((b, i) => ({ key: 'b' + i, ...b }));
       }
       return parsed.map((b, i) => ({
         key: 'b' + i,
-        min: typeof b.min === 'number' ? b.min : DEFAULT_DURATION_BUCKETS[i].min,
+        min: typeof b.min === 'number' ? b.min : def.defaults[i].min,
         max: (b.max === null || b.max === undefined) ? Infinity : b.max
       }));
     } catch (e) {
-      return DEFAULT_DURATION_BUCKETS.map(b => ({ ...b }));
+      return def.defaults.map((b, i) => ({ key: 'b' + i, ...b }));
     }
   }
-  function saveDurationBuckets(tabKey, buckets) {
+  function saveBuckets(tabKey, mode, buckets) {
+    const storageKey = mode === 'duration' 
+      ? 'analyzer_duration_buckets_' + tabKey
+      : 'analyzer_buckets_' + mode + '_' + tabKey;
     const serializable = buckets.map(b => ({
       min: b.min,
       max: b.max === Infinity ? null : b.max
     }));
-    localStorage.setItem('analyzer_duration_buckets_' + tabKey, JSON.stringify(serializable));
+    localStorage.setItem(storageKey, JSON.stringify(serializable));
+  }
+  
+  // 後方互換：既存コードからの呼び出し（duration固定）
+  function loadDurationBuckets(tabKey) {
+    return loadBuckets(tabKey, 'duration');
+  }
+  function saveDurationBuckets(tabKey, buckets) {
+    saveBuckets(tabKey, 'duration', buckets);
   }
   
   // 互換性のための DURATION_BUCKETS（過去コード用、現在のcopi設定をそのまま使う）
-  // ※ filterVideosByPeriod内のバケット振り分けでは tabKey の設定を直接使うように修正済み
   let DURATION_BUCKETS = loadDurationBuckets('copi');
   
   // 動画の尺を最も狭くマッチするバケットに振り分ける（区間重なり対応）
-  function findBestBucket(sec, buckets) {
-    const matches = buckets.filter(b => sec >= b.min && sec < b.max);
+  // ※モード対応：valueは秒 or %、バケットの単位に合わせて呼び出し側で渡す
+  function findBestBucket(value, buckets) {
+    if (value === null || value === undefined) return null;
+    const matches = buckets.filter(b => value >= b.min && value < b.max);
     if (matches.length === 0) return null;
     if (matches.length === 1) return matches[0];
-    // 複数マッチした場合：最も狭い区間（max-min が小さい）を選ぶ
+    // 複数マッチした場合：最も狭い区間を選ぶ
     return matches.reduce((narrowest, b) => {
       const narrowSpan = narrowest.max === Infinity ? Infinity : (narrowest.max - narrowest.min);
       const bSpan = b.max === Infinity ? Infinity : (b.max - b.min);
