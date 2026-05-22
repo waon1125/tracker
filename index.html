@@ -1348,12 +1348,19 @@
     border-radius: 16px;
     box-shadow: 6px 6px 0 var(--shadow);
     padding: 12px;
-    z-index: 200;
+    z-index: 300;
     min-width: 220px;
     max-width: 300px;
-    display: none;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.1s;
   }
-  .schedule-drag-picker.show { display: block; }
+  .schedule-drag-picker.show {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+  }
   .schedule-drag-picker-header {
     font-size: 12px;
     font-weight: 800;
@@ -3223,14 +3230,15 @@
       </div>
     </div>
   </div>
-  <!-- ドラッグ完了後のタスク選択ポップアップ -->
-  <div class="schedule-drag-picker" id="scheduleDragPicker">
-    <div class="schedule-drag-picker-header">
-      ⏰ <span class="schedule-drag-picker-range" id="scheduleDragPickerRange">—</span> に適用するタスクを選択
-    </div>
-    <div class="schedule-drag-picker-grid" id="scheduleDragPickerGrid"></div>
-    <button class="schedule-drag-picker-cancel" id="scheduleDragPickerCancel">キャンセル</button>
+</div>
+
+<!-- ドラッグ完了後のタスク選択ポップアップ（schedule-modal-overlayの外に出して z-index競合を避ける） -->
+<div class="schedule-drag-picker" id="scheduleDragPicker">
+  <div class="schedule-drag-picker-header">
+    ⏰ <span class="schedule-drag-picker-range" id="scheduleDragPickerRange">—</span> に適用するタスクを選択
   </div>
+  <div class="schedule-drag-picker-grid" id="scheduleDragPickerGrid"></div>
+  <button class="schedule-drag-picker-cancel" id="scheduleDragPickerCancel">キャンセル</button>
 </div>
 
 <!-- タスク管理モーダル -->
@@ -5978,32 +5986,46 @@
     tasks.forEach(task => {
       const chip = document.createElement('button');
       chip.className = 'schedule-task-chip';
+      chip.type = 'button';
       chip.innerHTML = `<span class="schedule-task-chip-color" style="background: ${task.color};"></span><span>${task.emoji} ${escapeHtml(task.name)}</span>`;
-      chip.addEventListener('click', () => {
-        applyDragRange(startMin, endMin, task.id);
+      // mousedownでもイベント伝播を止める（外クリック判定を回避）
+      chip.addEventListener('mousedown', (e) => { e.stopPropagation(); });
+      chip.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // 順序重要：先にpickerを隠してからapplyを呼ぶ
+        // applyDragRange 内で renderScheduleAll が走り、再描画されるため
         hideDragPicker();
+        applyDragRange(startMin, endMin, task.id);
       });
       grid.appendChild(chip);
     });
     // 位置：マウスカーソルの近くに
     const clientX = (ev && (ev.changedTouches ? ev.changedTouches[0].clientX : ev.clientX)) || window.innerWidth / 2;
     const clientY = (ev && (ev.changedTouches ? ev.changedTouches[0].clientY : ev.clientY)) || window.innerHeight / 2;
-    picker.style.display = 'block'; // サイズ取得のため一旦表示
-    const pickerW = picker.offsetWidth;
-    const pickerH = picker.offsetHeight;
-    let left = clientX + 10;
-    let top = clientY + 10;
-    if (left + pickerW > window.innerWidth - 10) left = window.innerWidth - pickerW - 10;
-    if (top + pickerH > window.innerHeight - 10) top = clientY - pickerH - 10;
-    if (top < 10) top = 10;
-    picker.style.left = left + 'px';
-    picker.style.top = top + 'px';
+    // 仮位置に置いてサイズ取得
+    picker.style.left = '0px';
+    picker.style.top = '0px';
     picker.classList.add('show');
+    // 次フレームで位置調整（DOMサイズ取得のため）
+    requestAnimationFrame(() => {
+      const pickerW = picker.offsetWidth;
+      const pickerH = picker.offsetHeight;
+      let left = clientX + 10;
+      let top = clientY + 10;
+      if (left + pickerW > window.innerWidth - 10) left = window.innerWidth - pickerW - 10;
+      if (top + pickerH > window.innerHeight - 10) top = clientY - pickerH - 10;
+      if (top < 10) top = 10;
+      if (left < 10) left = 10;
+      picker.style.left = left + 'px';
+      picker.style.top = top + 'px';
+    });
   }
 
   function hideDragPicker() {
     const picker = document.getElementById('scheduleDragPicker');
-    if (picker) picker.classList.remove('show');
+    if (picker) {
+      picker.classList.remove('show');
+    }
     const preview = document.getElementById('scheduleChartDragPreview');
     if (preview) preview.innerHTML = '';
   }
@@ -6560,17 +6582,20 @@
   });
   // 閉じる
   document.getElementById('scheduleCloseBtn').addEventListener('click', closeScheduleModal);
-  // ドラッグピッカー
-  document.getElementById('scheduleDragPickerCancel').addEventListener('click', hideDragPicker);
-  // ピッカー外クリックで閉じる
-  document.addEventListener('mousedown', (e) => {
-    const picker = document.getElementById('scheduleDragPicker');
-    if (!picker || !picker.classList.contains('show')) return;
-    if (!picker.contains(e.target)) {
-      // SVG内のクリックなら別の処理（新規ドラッグ）として hide のみで止める
+  // ドラッグピッカー：キャンセル
+  (function() {
+    const cancelBtn = document.getElementById('scheduleDragPickerCancel');
+    cancelBtn.type = 'button';
+    cancelBtn.addEventListener('mousedown', (e) => { e.stopPropagation(); });
+    cancelBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
       hideDragPicker();
-    }
-  });
+    });
+    // ピッカー自体の mousedown は伝播させない（外クリック判定で勝手に閉じるのを防ぐ）
+    const picker = document.getElementById('scheduleDragPicker');
+    picker.addEventListener('mousedown', (e) => { e.stopPropagation(); });
+    picker.addEventListener('click', (e) => { e.stopPropagation(); });
+  })();
   // 外側クリックは閉じない（誤クリックで消えると困るので）
   // ただしEscキーで閉じる
   document.addEventListener('keydown', (e) => {
