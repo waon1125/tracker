@@ -960,6 +960,389 @@
     box-shadow: 6px 6px 0 var(--shadow);
   }
 
+  /* ===== タイムスケジュール円グラフ ===== */
+  /* カレンダーセル内の小さいドーナツ */
+  .cal-day-donut {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+  }
+  .cal-day-donut-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+  }
+  .cal-day-donut-label {
+    font-size: 9px;
+    font-weight: 800;
+    color: var(--text-muted);
+  }
+
+  /* スケジュール編集モーダル */
+  .schedule-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 150;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .schedule-modal-overlay.show { display: flex; }
+  .schedule-modal {
+    background: var(--card-bg);
+    border: 3px solid var(--card-border);
+    border-radius: 24px;
+    padding: 24px;
+    width: 100%;
+    max-width: 920px;
+    max-height: 92vh;
+    overflow-y: auto;
+    box-shadow: 8px 8px 0 var(--shadow);
+  }
+  .schedule-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .schedule-modal-title {
+    font-size: 22px;
+    font-weight: 900;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .schedule-channel-tabs {
+    display: flex;
+    gap: 8px;
+  }
+  .schedule-channel-tab {
+    background: var(--card-bg);
+    border: 2.5px solid var(--card-border);
+    border-radius: 14px;
+    padding: 8px 18px;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 3px 3px 0 var(--shadow);
+    color: var(--text);
+    transition: all 0.15s;
+  }
+  .schedule-channel-tab:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0 var(--shadow);
+  }
+  .schedule-channel-tab.active {
+    background: var(--accent-pink);
+    color: var(--on-accent);
+  }
+  .schedule-modal-body {
+    display: grid;
+    grid-template-columns: minmax(280px, 1fr) 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 760px) {
+    .schedule-modal-body { grid-template-columns: 1fr; }
+  }
+  .schedule-chart-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .schedule-chart-svg {
+    width: 100%;
+    max-width: 320px;
+    aspect-ratio: 1;
+    display: block;
+  }
+  .schedule-chart-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    width: 100%;
+    max-width: 320px;
+  }
+  .schedule-chart-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 6px;
+  }
+  .schedule-chart-legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1.5px solid var(--card-border);
+    flex-shrink: 0;
+  }
+  .schedule-chart-legend-swatch.ring {
+    background: transparent !important;
+    border-width: 4px;
+  }
+  .schedule-side {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+  }
+  .schedule-mode-switch {
+    display: flex;
+    gap: 6px;
+    padding: 4px;
+    background: var(--bg);
+    border-radius: 12px;
+    border: 2px dashed var(--section-dashed);
+  }
+  .schedule-mode-btn {
+    flex: 1;
+    background: transparent;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all 0.15s;
+  }
+  .schedule-mode-btn.active {
+    background: var(--card-bg);
+    color: var(--text);
+    border-color: var(--card-border);
+    box-shadow: 2px 2px 0 var(--shadow);
+  }
+  .schedule-task-palette {
+    background: var(--bg);
+    border-radius: 12px;
+    padding: 10px;
+    border: 2px dashed var(--section-dashed);
+  }
+  .schedule-task-palette-title {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .schedule-task-palette-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .schedule-task-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--card-bg);
+    border: 2px solid var(--card-border);
+    border-radius: 10px;
+    padding: 5px 10px;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 2px 2px 0 var(--shadow);
+    color: var(--text);
+    transition: all 0.15s;
+  }
+  .schedule-task-chip:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--shadow);
+  }
+  .schedule-task-chip-color {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1px solid var(--card-border);
+  }
+  .schedule-slots {
+    background: var(--bg);
+    border-radius: 12px;
+    padding: 10px;
+    border: 2px dashed var(--section-dashed);
+  }
+  .schedule-slots-title {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .schedule-slot-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+  .schedule-slot-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--card-bg);
+    border: 1.5px solid var(--card-border);
+    border-radius: 8px;
+    padding: 5px 8px;
+  }
+  .schedule-slot-color-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1px solid var(--card-border);
+    flex-shrink: 0;
+  }
+  .schedule-slot-task-name {
+    flex: 1;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .schedule-slot-time {
+    font-family: monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 700;
+  }
+  .schedule-slot-time-input {
+    font-family: monospace;
+    font-size: 11px;
+    padding: 2px 4px;
+    border: 1.5px solid var(--card-border);
+    border-radius: 5px;
+    background: var(--card-bg);
+    color: var(--text);
+    width: 56px;
+    font-weight: 700;
+  }
+  .schedule-slot-delete {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--text-faint);
+    font-size: 13px;
+    padding: 2px 5px;
+    border-radius: 4px;
+  }
+  .schedule-slot-delete:hover {
+    color: #fff;
+    background: var(--danger);
+  }
+  .schedule-slot-empty {
+    text-align: center;
+    color: var(--text-faint);
+    font-size: 11px;
+    padding: 12px;
+    font-weight: 700;
+  }
+  .schedule-add-row {
+    display: flex;
+    gap: 4px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    padding-top: 8px;
+    border-top: 1.5px dashed var(--section-dashed);
+  }
+  .schedule-add-row-label {
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--text-muted);
+    margin-right: 4px;
+  }
+  .schedule-copy-btn {
+    background: var(--accent-light-yellow);
+    border: 2px solid var(--card-border);
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    color: var(--text);
+    box-shadow: 2px 2px 0 var(--shadow);
+  }
+  .schedule-copy-btn:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--shadow);
+  }
+
+  /* タスク管理モーダル */
+  .task-manager-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--card-bg);
+    border: 2px solid var(--card-border);
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+  }
+  .task-manager-emoji {
+    font-size: 20px;
+    min-width: 28px;
+    text-align: center;
+  }
+  .task-manager-emoji-input {
+    width: 50px;
+    text-align: center;
+    font-size: 18px;
+    padding: 4px;
+  }
+  .task-manager-name-input {
+    flex: 1;
+    font-size: 13px;
+    padding: 4px 8px;
+    min-width: 0;
+  }
+  .task-manager-color {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 2px solid var(--card-border);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .task-manager-color input[type="color"] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .task-manager-delete {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--text-faint);
+    font-size: 16px;
+    padding: 4px 8px;
+    border-radius: 6px;
+  }
+  .task-manager-delete:hover {
+    color: #fff;
+    background: var(--danger);
+  }
+
   /* ===== メモビュー ===== */
   .memo-layout {
     display: grid;
@@ -2657,6 +3040,11 @@
 <div class="day-popover hidden" id="dayPopover">
   <div class="popover-arrow"></div>
   <div class="popover-header" id="popoverHeader">—</div>
+  <div class="popover-section" id="popoverScheduleSection" style="padding-bottom: 8px; border-bottom: 2px dashed var(--section-dashed); margin-bottom: 8px;">
+    <button id="popoverOpenScheduleBtn" style="width: 100%; background: var(--accent-teal); color: var(--on-accent); border: 2px solid var(--card-border); border-radius: 10px; padding: 8px 12px; font-family: 'M PLUS Rounded 1c', sans-serif; font-size: 13px; font-weight: 800; cursor: pointer; box-shadow: 3px 3px 0 var(--shadow); display: flex; align-items: center; justify-content: center; gap: 6px;">
+      ⏰ タイムスケジュールを開く
+    </button>
+  </div>
   <div class="popover-section" id="popoverAddSection">
     <div class="popover-section-title">📌 予定を追加</div>
     <div class="popover-icons" id="popoverIcons"></div>
@@ -2664,6 +3052,82 @@
   <div class="popover-section" id="popoverEventsSection">
     <div class="popover-section-title">📋 登録済みの予定</div>
     <div class="popover-events-list" id="popoverEventsList"></div>
+  </div>
+</div>
+
+<!-- タイムスケジュール円グラフ編集モーダル -->
+<div class="schedule-modal-overlay" id="scheduleModal">
+  <div class="schedule-modal">
+    <div class="schedule-modal-header">
+      <div class="schedule-modal-title">
+        <span>⏰</span>
+        <span id="scheduleModalDateLabel">—</span>
+      </div>
+      <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+        <div class="schedule-channel-tabs" id="scheduleChannelTabs">
+          <button class="schedule-channel-tab active" data-ch="ch1">🌙 コピプラ</button>
+          <button class="schedule-channel-tab" data-ch="ch2">🍁 和音</button>
+        </div>
+        <button class="small-btn" id="scheduleTasksManageBtn">⚙️ タスク管理</button>
+        <button class="small-btn" id="scheduleCloseBtn" style="background: var(--accent-light-pink);">✕ 閉じる</button>
+      </div>
+    </div>
+    <div class="schedule-modal-body">
+      <div class="schedule-chart-wrap">
+        <svg class="schedule-chart-svg" id="scheduleChartSvg" viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div class="schedule-chart-legend">
+          <div class="schedule-chart-legend-item">
+            <span class="schedule-chart-legend-swatch ring" style="border-color: var(--text-muted); border-style: dashed;"></span>
+            <span>内側：予定 / 外側：実績</span>
+          </div>
+          <div style="font-size: 10px; color: var(--text-faint); padding: 0 6px; font-weight: 700;">
+            💡 真上が0:00、時計回りに24時間
+          </div>
+        </div>
+      </div>
+      <div class="schedule-side">
+        <div class="schedule-mode-switch">
+          <button class="schedule-mode-btn active" data-mode="planned">📋 予定（内側）</button>
+          <button class="schedule-mode-btn" data-mode="actual">✅ 実績（外側）</button>
+        </div>
+        <div class="schedule-task-palette">
+          <div class="schedule-task-palette-title">
+            <span>タスク（クリックで追加）</span>
+          </div>
+          <div class="schedule-task-palette-grid" id="schedulePaletteGrid"></div>
+        </div>
+        <div class="schedule-slots">
+          <div class="schedule-slots-title">⏱ 時間帯リスト <span id="scheduleSlotsTotal" style="font-weight: 600; margin-left: 4px;"></span></div>
+          <div class="schedule-slot-list" id="scheduleSlotList"></div>
+          <div class="schedule-add-row">
+            <span class="schedule-add-row-label">クイック操作：</span>
+            <button class="schedule-copy-btn" id="scheduleCopyFromPlanBtn" title="予定をコピーして実績の下書きを作成">📋 予定→実績にコピー</button>
+            <button class="schedule-copy-btn" id="scheduleClearBtn" style="background: var(--accent-light-pink);" title="現在のモード（予定/実績）の全スロット削除">🗑 全削除</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- タスク管理モーダル -->
+<div class="modal-overlay" id="taskManagerModal">
+  <div class="modal">
+    <div class="modal-title">
+      <span>⚙️</span>
+      <span>タスク管理</span>
+      <span id="taskManagerChannelLabel" style="font-size: 14px; font-weight: 700; color: var(--text-muted); margin-left: 4px;"></span>
+    </div>
+    <div class="modal-section">
+      <div class="modal-section-title">登録済みタスク</div>
+      <div id="taskManagerList"></div>
+      <button class="btn btn-ghost" id="addNewTaskBtn" style="margin-top: 10px; width: 100%;">＋ 新しいタスクを追加</button>
+    </div>
+    <div class="hint">💡 タスクの絵文字・名前・色は自由に編集できます。削除すると、そのタスクを使っていた予定/実績の時間帯も自動削除されます。</div>
+    <div class="btn-row">
+      <button class="btn btn-save" id="saveTaskManagerBtn">保存</button>
+      <button class="btn btn-ghost" id="closeTaskManagerBtn">キャンセル</button>
+    </div>
   </div>
 </div>
 
@@ -2906,6 +3370,30 @@
   ];
   let calendarEvents = {}; // { 'YYYY-MM-DD': [{emoji, name, id}, ...] }
 
+  // ===== タイムスケジュール（円グラフ）機能 =====
+  // タスク定義：チャンネル別（ch1=コピプラ, ch2=和音）
+  let scheduleTasks = {
+    ch1: [
+      { id: 'st_default_work',  name: '作業', emoji: '💻', color: '#4ecdc4' },
+      { id: 'st_default_break', name: '休憩', emoji: '☕', color: '#ffd93d' },
+      { id: 'st_default_meal',  name: '食事', emoji: '🍚', color: '#ff9f6b' },
+      { id: 'st_default_sleep', name: '睡眠', emoji: '😴', color: '#8a8db5' },
+    ],
+    ch2: [
+      { id: 'st_default_work2',  name: '作業', emoji: '💻', color: '#4ecdc4' },
+      { id: 'st_default_break2', name: '休憩', emoji: '☕', color: '#ffd93d' },
+      { id: 'st_default_meal2',  name: '食事', emoji: '🍚', color: '#ff9f6b' },
+      { id: 'st_default_sleep2', name: '睡眠', emoji: '😴', color: '#8a8db5' },
+    ]
+  };
+  // スケジュールデータ：
+  // scheduleData[channelKey][dateStr] = { planned: [{id, taskId, start, end, memo}], actual: [...] }
+  // start/end は「分単位（0〜1440）」。1440=24:00。
+  let scheduleData = { ch1: {}, ch2: {} };
+  // 円グラフ編集モーダル用の状態
+  let scheduleModalDate = null;   // 編集中の日付 'YYYY-MM-DD'
+  let scheduleModalChannel = 'ch1'; // 編集中のチャンネル
+
   // ===== メモ機能 =====
   // memoPages: [{id, emoji, name, blocks:[{id, type, ...}], createdAt, updatedAt}, ...]
   let memoPages = [];
@@ -2990,7 +3478,9 @@
       channels,
       calendarEvents,
       iconTypes,
-      memoPages
+      memoPages,
+      scheduleTasks,
+      scheduleData
     };
     localStorage.setItem('tracker_cache', JSON.stringify(payload));
   }
@@ -3015,6 +3505,21 @@
         }
         if (parsed.memoPages && Array.isArray(parsed.memoPages)) {
           memoPages = parsed.memoPages;
+        }
+        // スケジュール関連
+        if (parsed.scheduleTasks && typeof parsed.scheduleTasks === 'object') {
+          ['ch1', 'ch2'].forEach(k => {
+            if (Array.isArray(parsed.scheduleTasks[k])) {
+              scheduleTasks[k] = parsed.scheduleTasks[k];
+            }
+          });
+        }
+        if (parsed.scheduleData && typeof parsed.scheduleData === 'object') {
+          ['ch1', 'ch2'].forEach(k => {
+            if (parsed.scheduleData[k] && typeof parsed.scheduleData[k] === 'object') {
+              scheduleData[k] = parsed.scheduleData[k];
+            }
+          });
         }
       } catch (e) {}
     }
@@ -3108,6 +3613,21 @@
     if (data.memoPages && Array.isArray(data.memoPages)) {
       memoPages = data.memoPages;
     }
+    // スケジュール関連
+    if (data.scheduleTasks && typeof data.scheduleTasks === 'object') {
+      ['ch1', 'ch2'].forEach(k => {
+        if (Array.isArray(data.scheduleTasks[k])) {
+          scheduleTasks[k] = data.scheduleTasks[k];
+        }
+      });
+    }
+    if (data.scheduleData && typeof data.scheduleData === 'object') {
+      ['ch1', 'ch2'].forEach(k => {
+        if (data.scheduleData[k] && typeof data.scheduleData[k] === 'object') {
+          scheduleData[k] = data.scheduleData[k];
+        }
+      });
+    }
     saveCache();
   }
   
@@ -3128,13 +3648,15 @@
         calendarEvents,
         iconTypes,
         memoPages,
+        scheduleTasks,
+        scheduleData,
         _updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       };
       const docRef = firestoreDb.collection(FIRESTORE_COLLECTION).doc(FIRESTORE_DOC_ID);
       // 自分の書き込みはリスナー側で hasPendingWrites と firestoreLastSaved で判別するので
       // ここでフラグ立てる必要なし
       await docRef.set(payload, { merge: false });
-      firestoreLastSaved = JSON.stringify({ channels, calendarEvents, iconTypes, memoPages });
+      firestoreLastSaved = JSON.stringify({ channels, calendarEvents, iconTypes, memoPages, scheduleTasks, scheduleData });
       lastSyncTime = new Date();
       setSyncStatus('synced', '同期済み ✓');
       return true;
@@ -3172,7 +3694,9 @@
         channels: data.channels,
         calendarEvents: data.calendarEvents,
         iconTypes: data.iconTypes,
-        memoPages: data.memoPages
+        memoPages: data.memoPages,
+        scheduleTasks: data.scheduleTasks,
+        scheduleData: data.scheduleData
       });
       if (dataJson === firestoreLastSaved) {
         return;
@@ -4951,6 +5475,41 @@
       });
       cell.appendChild(eventsDiv);
     }
+
+    // スケジュールのミニドーナツ表示（チャンネル別）
+    const ch1HasData = hasScheduleData('ch1', dateStr);
+    const ch2HasData = hasScheduleData('ch2', dateStr);
+    if (ch1HasData || ch2HasData) {
+      const donutRow = document.createElement('div');
+      donutRow.className = 'cal-day-donut-row';
+      if (ch1HasData) {
+        const wrap = document.createElement('div');
+        wrap.title = 'コピプラ：タイムスケジュールあり';
+        wrap.style.display = 'flex';
+        wrap.style.alignItems = 'center';
+        wrap.style.gap = '2px';
+        const label = document.createElement('span');
+        label.className = 'cal-day-donut-label';
+        label.textContent = '🌙';
+        wrap.appendChild(label);
+        wrap.appendChild(renderMiniDonut('ch1', dateStr));
+        donutRow.appendChild(wrap);
+      }
+      if (ch2HasData) {
+        const wrap = document.createElement('div');
+        wrap.title = '和音：タイムスケジュールあり';
+        wrap.style.display = 'flex';
+        wrap.style.alignItems = 'center';
+        wrap.style.gap = '2px';
+        const label = document.createElement('span');
+        label.className = 'cal-day-donut-label';
+        label.textContent = '🍁';
+        wrap.appendChild(label);
+        wrap.appendChild(renderMiniDonut('ch2', dateStr));
+        donutRow.appendChild(wrap);
+      }
+      cell.appendChild(donutRow);
+    }
     
     cell.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -4964,6 +5523,629 @@
     return cell;
   }
 
+  // ===== スケジュール用ユーティリティ =====
+  function hasScheduleData(ch, dateStr) {
+    const d = scheduleData[ch] && scheduleData[ch][dateStr];
+    if (!d) return false;
+    const p = Array.isArray(d.planned) ? d.planned.length : 0;
+    const a = Array.isArray(d.actual) ? d.actual.length : 0;
+    return (p + a) > 0;
+  }
+
+  // ミニドーナツ（カレンダーセル用、28x28）
+  function renderMiniDonut(ch, dateStr) {
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('class', 'cal-day-donut');
+    svg.setAttribute('viewBox', '0 0 36 36');
+    const cx = 18, cy = 18;
+    const data = scheduleData[ch][dateStr] || {};
+    const tasks = scheduleTasks[ch] || [];
+    const taskMap = new Map(tasks.map(t => [t.id, t]));
+    // 背景円
+    const bg = document.createElementNS(svgNS, 'circle');
+    bg.setAttribute('cx', cx); bg.setAttribute('cy', cy);
+    bg.setAttribute('r', 14);
+    bg.style.fill = 'var(--dim-bg)';
+    bg.style.stroke = 'var(--section-dashed)';
+    bg.setAttribute('stroke-width', '0.6');
+    svg.appendChild(bg);
+    // 内側：予定
+    drawDonutArcs(svg, cx, cy, 9, 12, data.planned || [], taskMap, 0.55);
+    // 外側：実績
+    drawDonutArcs(svg, cx, cy, 13, 16, data.actual || [], taskMap, 1.0);
+    return svg;
+  }
+
+  // 円弧描画ヘルパー
+  // minutes 0〜1440 を、12時方向起点で時計回りに変換
+  function minutesToAngle(m) {
+    // 0時=-90度（真上）、24時=270度。時計回りなので -90 + (m/1440)*360
+    return -90 + (m / 1440) * 360;
+  }
+  function polar(cx, cy, r, angleDeg) {
+    const rad = angleDeg * Math.PI / 180;
+    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+  }
+  // 円弧（リング状）パス：rIn〜rOut の幅、startMin〜endMin の角度
+  function ringArcPath(cx, cy, rIn, rOut, startMin, endMin) {
+    const a1 = minutesToAngle(startMin);
+    const a2 = minutesToAngle(endMin);
+    const sweepAngle = (endMin - startMin) / 1440 * 360;
+    const largeArc = sweepAngle > 180 ? 1 : 0;
+    const p1Out = polar(cx, cy, rOut, a1);
+    const p2Out = polar(cx, cy, rOut, a2);
+    const p1In = polar(cx, cy, rIn, a1);
+    const p2In = polar(cx, cy, rIn, a2);
+    // M(外側起点) → A(外側時計回り) → L(内側終点) → A(内側反時計回り) → Z
+    return `M ${p1Out.x} ${p1Out.y} A ${rOut} ${rOut} 0 ${largeArc} 1 ${p2Out.x} ${p2Out.y} L ${p2In.x} ${p2In.y} A ${rIn} ${rIn} 0 ${largeArc} 0 ${p1In.x} ${p1In.y} Z`;
+  }
+  function drawDonutArcs(svg, cx, cy, rIn, rOut, slots, taskMap, opacity) {
+    const svgNS = 'http://www.w3.org/2000/svg';
+    slots.forEach(slot => {
+      const task = taskMap.get(slot.taskId);
+      if (!task) return;
+      // 安全範囲チェック
+      let s = Math.max(0, Math.min(1440, slot.start || 0));
+      let e = Math.max(0, Math.min(1440, slot.end || 0));
+      if (e <= s) return;
+      // ほぼ24時間（=1440）の場合、SVG弧は閉じないので2分割
+      if (e - s >= 1440 - 0.1) {
+        const path1 = document.createElementNS(svgNS, 'path');
+        path1.setAttribute('d', ringArcPath(cx, cy, rIn, rOut, s, s + 720));
+        path1.setAttribute('fill', task.color || '#888');
+        path1.setAttribute('opacity', opacity);
+        svg.appendChild(path1);
+        const path2 = document.createElementNS(svgNS, 'path');
+        path2.setAttribute('d', ringArcPath(cx, cy, rIn, rOut, s + 720, e));
+        path2.setAttribute('fill', task.color || '#888');
+        path2.setAttribute('opacity', opacity);
+        svg.appendChild(path2);
+      } else {
+        const path = document.createElementNS(svgNS, 'path');
+        path.setAttribute('d', ringArcPath(cx, cy, rIn, rOut, s, e));
+        path.setAttribute('fill', task.color || '#888');
+        path.setAttribute('opacity', opacity);
+        svg.appendChild(path);
+      }
+    });
+  }
+
+  // ================================================================
+  // ===== タイムスケジュール円グラフ機能 =====
+  // ================================================================
+
+  let scheduleEditMode = 'planned'; // 'planned' or 'actual'
+  // タスク管理モーダルの作業用コピー（保存時のみ scheduleTasks に反映）
+  let taskManagerDraft = null;
+
+  // 分→"HH:MM"
+  function minutesToHHMM(m) {
+    if (m === 1440) return '24:00';
+    const h = Math.floor(m / 60);
+    const mm = m % 60;
+    return `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+  }
+  // "HH:MM"→分（バリデーション付き）
+  function hhmmToMinutes(s) {
+    if (!s || typeof s !== 'string') return null;
+    const m = s.match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return null;
+    const h = parseInt(m[1]);
+    const mm = parseInt(m[2]);
+    if (h < 0 || h > 24 || mm < 0 || mm > 59) return null;
+    const total = h * 60 + mm;
+    if (total < 0 || total > 1440) return null;
+    return total;
+  }
+
+  function getCurrentSlots() {
+    if (!scheduleModalDate) return [];
+    const day = scheduleData[scheduleModalChannel]?.[scheduleModalDate];
+    if (!day) return [];
+    return day[scheduleEditMode] || [];
+  }
+  function ensureScheduleDay() {
+    if (!scheduleData[scheduleModalChannel][scheduleModalDate]) {
+      scheduleData[scheduleModalChannel][scheduleModalDate] = { planned: [], actual: [] };
+    }
+    const d = scheduleData[scheduleModalChannel][scheduleModalDate];
+    if (!Array.isArray(d.planned)) d.planned = [];
+    if (!Array.isArray(d.actual)) d.actual = [];
+    return d;
+  }
+
+  function openScheduleModal(dateStr) {
+    scheduleModalDate = dateStr;
+    // デフォルトはch1だが、その日のデータがch2にだけあるならch2を初期表示
+    if (!hasScheduleData('ch1', dateStr) && hasScheduleData('ch2', dateStr)) {
+      scheduleModalChannel = 'ch2';
+    } else if (!scheduleModalChannel) {
+      scheduleModalChannel = 'ch1';
+    }
+    scheduleEditMode = 'planned';
+    // 日付ラベル
+    const d = new Date(dateStr);
+    const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+    const dayName = dayNames[d.getDay()];
+    document.getElementById('scheduleModalDateLabel').textContent = 
+      `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${dayName}）`;
+    // チャンネルタブ
+    document.querySelectorAll('#scheduleChannelTabs .schedule-channel-tab').forEach(b => {
+      b.classList.toggle('active', b.dataset.ch === scheduleModalChannel);
+    });
+    // モード
+    document.querySelectorAll('.schedule-mode-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.mode === scheduleEditMode);
+    });
+    renderScheduleAll();
+    document.getElementById('scheduleModal').classList.add('show');
+  }
+  function closeScheduleModal() {
+    document.getElementById('scheduleModal').classList.remove('show');
+    // カレンダー再描画（ミニドーナツ更新）
+    renderCalendar();
+  }
+  
+  function renderScheduleAll() {
+    renderScheduleChart();
+    renderSchedulePalette();
+    renderScheduleSlotList();
+  }
+
+  // メインの大きい円グラフ（220x220）
+  function renderScheduleChart() {
+    const svg = document.getElementById('scheduleChartSvg');
+    svg.innerHTML = '';
+    const cx = 110, cy = 110;
+    const day = scheduleData[scheduleModalChannel]?.[scheduleModalDate] || { planned: [], actual: [] };
+    const tasks = scheduleTasks[scheduleModalChannel] || [];
+    const taskMap = new Map(tasks.map(t => [t.id, t]));
+    const svgNS = 'http://www.w3.org/2000/svg';
+
+    // 背景（薄い円）
+    const bg = document.createElementNS(svgNS, 'circle');
+    bg.setAttribute('cx', cx); bg.setAttribute('cy', cy);
+    bg.setAttribute('r', 95);
+    bg.style.fill = 'var(--dim-bg)';
+    bg.style.stroke = 'var(--section-dashed)';
+    bg.setAttribute('stroke-width', '0.6');
+    svg.appendChild(bg);
+
+    // 時刻目盛り：3時間ごと（0, 3, 6, 9, 12, 15, 18, 21）
+    for (let h = 0; h < 24; h += 3) {
+      const minutes = h * 60;
+      const angle = minutesToAngle(minutes);
+      const pInner = polar(cx, cy, 96, angle);
+      const pOuter = polar(cx, cy, 102, angle);
+      const tick = document.createElementNS(svgNS, 'line');
+      tick.setAttribute('x1', pInner.x); tick.setAttribute('y1', pInner.y);
+      tick.setAttribute('x2', pOuter.x); tick.setAttribute('y2', pOuter.y);
+      tick.style.stroke = 'var(--text-faint)';
+      tick.setAttribute('stroke-width', '1.2');
+      svg.appendChild(tick);
+      // 時刻ラベル
+      const labelPos = polar(cx, cy, 108, angle);
+      const label = document.createElementNS(svgNS, 'text');
+      label.setAttribute('x', labelPos.x);
+      label.setAttribute('y', labelPos.y);
+      label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('dominant-baseline', 'central');
+      label.setAttribute('font-size', '9');
+      label.setAttribute('font-weight', '700');
+      label.style.fill = 'var(--text-muted)';
+      label.setAttribute('font-family', "'M PLUS Rounded 1c', sans-serif");
+      label.textContent = String(h);
+      svg.appendChild(label);
+    }
+    // 1時間ごとの薄い目盛り
+    for (let h = 0; h < 24; h++) {
+      if (h % 3 === 0) continue;
+      const angle = minutesToAngle(h * 60);
+      const pInner = polar(cx, cy, 98, angle);
+      const pOuter = polar(cx, cy, 101, angle);
+      const tick = document.createElementNS(svgNS, 'line');
+      tick.setAttribute('x1', pInner.x); tick.setAttribute('y1', pInner.y);
+      tick.setAttribute('x2', pOuter.x); tick.setAttribute('y2', pOuter.y);
+      tick.style.stroke = 'var(--text-faint)';
+      tick.setAttribute('stroke-width', '0.5');
+      svg.appendChild(tick);
+    }
+
+    // 内側：予定（半径 35〜60）
+    drawDonutArcsInteractive(svg, cx, cy, 35, 60, day.planned || [], taskMap, 0.6, 'planned');
+    // 外側：実績（半径 65〜92）
+    drawDonutArcsInteractive(svg, cx, cy, 65, 92, day.actual || [], taskMap, 1.0, 'actual');
+
+    // 中央ラベル
+    const centerText = document.createElementNS(svgNS, 'text');
+    centerText.setAttribute('x', cx);
+    centerText.setAttribute('y', cy - 6);
+    centerText.setAttribute('text-anchor', 'middle');
+    centerText.setAttribute('font-size', '10');
+    centerText.setAttribute('font-weight', '800');
+    centerText.style.fill = 'var(--text-muted)';
+    centerText.setAttribute('font-family', "'M PLUS Rounded 1c', sans-serif");
+    centerText.textContent = scheduleModalChannel === 'ch1' ? '🌙 コピプラ' : '🍁 和音';
+    svg.appendChild(centerText);
+    const centerText2 = document.createElementNS(svgNS, 'text');
+    centerText2.setAttribute('x', cx);
+    centerText2.setAttribute('y', cy + 8);
+    centerText2.setAttribute('text-anchor', 'middle');
+    centerText2.setAttribute('font-size', '8');
+    centerText2.setAttribute('font-weight', '700');
+    centerText2.style.fill = 'var(--text-faint)';
+    centerText2.setAttribute('font-family', "'M PLUS Rounded 1c', sans-serif");
+    const plannedCount = (day.planned || []).length;
+    const actualCount = (day.actual || []).length;
+    centerText2.textContent = `予定${plannedCount} / 実績${actualCount}`;
+    svg.appendChild(centerText2);
+  }
+
+  // インタラクティブな弧描画（クリックでハイライト等は今のところなし、tooltipのみ）
+  function drawDonutArcsInteractive(svg, cx, cy, rIn, rOut, slots, taskMap, opacity, mode) {
+    const svgNS = 'http://www.w3.org/2000/svg';
+    slots.forEach(slot => {
+      const task = taskMap.get(slot.taskId);
+      if (!task) return;
+      let s = Math.max(0, Math.min(1440, slot.start || 0));
+      let e = Math.max(0, Math.min(1440, slot.end || 0));
+      if (e <= s) return;
+      const draw = (startMin, endMin) => {
+        const path = document.createElementNS(svgNS, 'path');
+        path.setAttribute('d', ringArcPath(cx, cy, rIn, rOut, startMin, endMin));
+        path.setAttribute('fill', task.color || '#888');
+        path.setAttribute('opacity', opacity);
+        path.style.stroke = 'var(--card-bg)';
+        path.setAttribute('stroke-width', '0.5');
+        const title = document.createElementNS(svgNS, 'title');
+        title.textContent = `${mode === 'planned' ? '予定' : '実績'}: ${task.emoji} ${task.name} (${minutesToHHMM(s)}〜${minutesToHHMM(e)})`;
+        path.appendChild(title);
+        svg.appendChild(path);
+      };
+      if (e - s >= 1440 - 0.1) {
+        draw(s, s + 720);
+        draw(s + 720, e);
+      } else {
+        draw(s, e);
+      }
+    });
+  }
+
+  function renderSchedulePalette() {
+    const grid = document.getElementById('schedulePaletteGrid');
+    grid.innerHTML = '';
+    const tasks = scheduleTasks[scheduleModalChannel] || [];
+    if (tasks.length === 0) {
+      grid.innerHTML = '<div style="font-size: 11px; color: var(--text-faint); padding: 4px;">タスクが登録されていません。「⚙️ タスク管理」から追加してください</div>';
+      return;
+    }
+    tasks.forEach(task => {
+      const chip = document.createElement('button');
+      chip.className = 'schedule-task-chip';
+      chip.innerHTML = `<span class="schedule-task-chip-color" style="background: ${task.color};"></span><span>${task.emoji} ${escapeHtml(task.name)}</span>`;
+      chip.title = `クリックで「${scheduleEditMode === 'planned' ? '予定' : '実績'}」に時間帯追加`;
+      chip.addEventListener('click', () => addNewScheduleSlot(task.id));
+      grid.appendChild(chip);
+    });
+  }
+
+  // 新規スロット追加：直前のスロットの end から、デフォルト1時間
+  function addNewScheduleSlot(taskId) {
+    const day = ensureScheduleDay();
+    const slots = day[scheduleEditMode];
+    let nextStart = 9 * 60; // デフォルト 9:00
+    if (slots.length > 0) {
+      // 最後のスロットの end から続ける
+      const lastEnd = slots.reduce((m, s) => Math.max(m, s.end || 0), 0);
+      nextStart = Math.min(lastEnd, 1380); // 23:00より前
+    }
+    const nextEnd = Math.min(nextStart + 60, 1440);
+    slots.push({
+      id: 'sl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      taskId,
+      start: nextStart,
+      end: nextEnd
+    });
+    persistScheduleAndRender();
+  }
+
+  function renderScheduleSlotList() {
+    const list = document.getElementById('scheduleSlotList');
+    list.innerHTML = '';
+    const slots = getCurrentSlots();
+    const tasks = scheduleTasks[scheduleModalChannel] || [];
+    const taskMap = new Map(tasks.map(t => [t.id, t]));
+    // 開始時刻順にソート（表示用、データの順序は維持）
+    const sorted = [...slots].sort((a, b) => (a.start || 0) - (b.start || 0));
+    
+    // 合計時間
+    const totalMin = slots.reduce((sum, s) => sum + Math.max(0, (s.end || 0) - (s.start || 0)), 0);
+    const totalH = Math.floor(totalMin / 60);
+    const totalM = totalMin % 60;
+    document.getElementById('scheduleSlotsTotal').textContent = 
+      slots.length > 0 ? `（${slots.length}件 / 合計 ${totalH}時間${totalM > 0 ? totalM + '分' : ''}）` : '';
+    
+    if (sorted.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'schedule-slot-empty';
+      empty.textContent = `タスクを上の一覧からクリックして追加してください`;
+      list.appendChild(empty);
+      return;
+    }
+    sorted.forEach(slot => {
+      const task = taskMap.get(slot.taskId);
+      const item = document.createElement('div');
+      item.className = 'schedule-slot-item';
+      const taskColor = task?.color || '#888';
+      const taskLabel = task ? `${task.emoji} ${task.name}` : `(削除されたタスク)`;
+      // 開始・終了時刻のinput
+      const startInput = `<input type="text" class="schedule-slot-time-input" data-field="start" data-slot-id="${slot.id}" value="${minutesToHHMM(slot.start || 0)}" maxlength="5" pattern="\\d{1,2}:\\d{2}">`;
+      const endInput = `<input type="text" class="schedule-slot-time-input" data-field="end" data-slot-id="${slot.id}" value="${minutesToHHMM(slot.end || 0)}" maxlength="5" pattern="\\d{1,2}:\\d{2}">`;
+      item.innerHTML = `
+        <span class="schedule-slot-color-dot" style="background: ${taskColor};"></span>
+        <span class="schedule-slot-task-name">${escapeHtml(taskLabel)}</span>
+        ${startInput}
+        <span style="font-size: 11px; color: var(--text-muted);">〜</span>
+        ${endInput}
+        <button class="schedule-slot-delete" data-slot-id="${slot.id}" title="削除">✕</button>
+      `;
+      list.appendChild(item);
+    });
+    // イベント
+    list.querySelectorAll('.schedule-slot-time-input').forEach(input => {
+      input.addEventListener('change', () => {
+        const slotId = input.dataset.slotId;
+        const field = input.dataset.field;
+        const val = hhmmToMinutes(input.value.trim());
+        if (val === null) {
+          alert('時刻は HH:MM 形式で入力してください（例：09:30）');
+          // 元の値に戻す
+          const slots2 = getCurrentSlots();
+          const s = slots2.find(x => x.id === slotId);
+          if (s) input.value = minutesToHHMM(s[field] || 0);
+          return;
+        }
+        const slots2 = getCurrentSlots();
+        const slot = slots2.find(x => x.id === slotId);
+        if (!slot) return;
+        const otherField = field === 'start' ? 'end' : 'start';
+        const otherVal = slot[otherField] || 0;
+        if (field === 'start' && val >= otherVal) {
+          alert('開始時刻は終了時刻より前にしてください');
+          input.value = minutesToHHMM(slot.start || 0);
+          return;
+        }
+        if (field === 'end' && val <= otherVal) {
+          alert('終了時刻は開始時刻より後にしてください');
+          input.value = minutesToHHMM(slot.end || 0);
+          return;
+        }
+        slot[field] = val;
+        persistScheduleAndRender();
+      });
+    });
+    list.querySelectorAll('.schedule-slot-delete').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const slotId = btn.dataset.slotId;
+        const slots2 = getCurrentSlots();
+        const idx = slots2.findIndex(s => s.id === slotId);
+        if (idx >= 0) {
+          slots2.splice(idx, 1);
+          persistScheduleAndRender();
+        }
+      });
+    });
+  }
+
+  // データを保存して画面を再描画
+  function persistScheduleAndRender() {
+    cleanupEmptyScheduleDay();
+    saveCache();
+    renderScheduleAll();
+    saveToFirestore();
+  }
+  // 空の日付エントリを削除（planned/actual両方空ならエントリ自体を削除）
+  function cleanupEmptyScheduleDay() {
+    ['ch1', 'ch2'].forEach(ch => {
+      Object.keys(scheduleData[ch]).forEach(dateStr => {
+        const d = scheduleData[ch][dateStr];
+        if (!d) return;
+        const p = Array.isArray(d.planned) ? d.planned.length : 0;
+        const a = Array.isArray(d.actual) ? d.actual.length : 0;
+        if (p === 0 && a === 0) {
+          delete scheduleData[ch][dateStr];
+        }
+      });
+    });
+  }
+
+  // ===== モーダル内ボタン =====
+  // チャンネル切替
+  document.querySelectorAll('#scheduleChannelTabs .schedule-channel-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      scheduleModalChannel = btn.dataset.ch;
+      document.querySelectorAll('#scheduleChannelTabs .schedule-channel-tab').forEach(b => 
+        b.classList.toggle('active', b === btn));
+      renderScheduleAll();
+    });
+  });
+  // モード切替（予定/実績）
+  document.querySelectorAll('.schedule-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      scheduleEditMode = btn.dataset.mode;
+      document.querySelectorAll('.schedule-mode-btn').forEach(b => 
+        b.classList.toggle('active', b === btn));
+      renderSchedulePalette();
+      renderScheduleSlotList();
+    });
+  });
+  // 予定→実績にコピー
+  document.getElementById('scheduleCopyFromPlanBtn').addEventListener('click', () => {
+    const day = ensureScheduleDay();
+    if (!day.planned || day.planned.length === 0) {
+      alert('コピー元の「予定」がありません');
+      return;
+    }
+    if (day.actual && day.actual.length > 0) {
+      if (!confirm('現在の「実績」を上書きしますか？')) return;
+    }
+    day.actual = day.planned.map(s => ({
+      id: 'sl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      taskId: s.taskId,
+      start: s.start,
+      end: s.end
+    }));
+    // モードを実績に切替
+    scheduleEditMode = 'actual';
+    document.querySelectorAll('.schedule-mode-btn').forEach(b => 
+      b.classList.toggle('active', b.dataset.mode === 'actual'));
+    persistScheduleAndRender();
+  });
+  // 全削除
+  document.getElementById('scheduleClearBtn').addEventListener('click', () => {
+    const modeLabel = scheduleEditMode === 'planned' ? '予定' : '実績';
+    if (!confirm(`この日の「${modeLabel}」を全て削除しますか？`)) return;
+    const day = ensureScheduleDay();
+    day[scheduleEditMode] = [];
+    persistScheduleAndRender();
+  });
+  // 閉じる
+  document.getElementById('scheduleCloseBtn').addEventListener('click', closeScheduleModal);
+  // 外側クリックは閉じない（誤クリックで消えると困るので）
+  // ただしEscキーで閉じる
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.getElementById('scheduleModal').classList.contains('show')) {
+      // タスク管理モーダルが開いていればそちらを優先で閉じる
+      if (document.getElementById('taskManagerModal').classList.contains('show')) return;
+      closeScheduleModal();
+    }
+  });
+
+  // ===== タスク管理モーダル =====
+  function openTaskManagerModal() {
+    // 現在チャンネルのタスクのディープコピーを作業用に
+    taskManagerDraft = JSON.parse(JSON.stringify(scheduleTasks[scheduleModalChannel] || []));
+    document.getElementById('taskManagerChannelLabel').textContent = 
+      scheduleModalChannel === 'ch1' ? '（🌙 コピプラ）' : '（🍁 和音）';
+    renderTaskManagerList();
+    document.getElementById('taskManagerModal').classList.add('show');
+  }
+  function closeTaskManagerModal() {
+    document.getElementById('taskManagerModal').classList.remove('show');
+    taskManagerDraft = null;
+  }
+  function renderTaskManagerList() {
+    const list = document.getElementById('taskManagerList');
+    list.innerHTML = '';
+    if (!taskManagerDraft || taskManagerDraft.length === 0) {
+      list.innerHTML = '<div style="font-size: 12px; color: var(--text-faint); text-align: center; padding: 12px; font-weight: 700;">タスクが登録されていません</div>';
+      return;
+    }
+    taskManagerDraft.forEach((task, idx) => {
+      const item = document.createElement('div');
+      item.className = 'task-manager-item';
+      item.innerHTML = `
+        <input type="text" class="task-manager-emoji-input" data-idx="${idx}" data-field="emoji" value="${task.emoji}" maxlength="4">
+        <input type="text" class="task-manager-name-input" data-idx="${idx}" data-field="name" value="${escapeHtml(task.name)}" maxlength="20">
+        <div class="task-manager-color" style="background: ${task.color};">
+          <input type="color" data-idx="${idx}" data-field="color" value="${task.color}">
+        </div>
+        <button class="task-manager-delete" data-idx="${idx}" title="削除">✕</button>
+      `;
+      list.appendChild(item);
+    });
+    // 入力イベント
+    list.querySelectorAll('input[data-field]').forEach(input => {
+      input.addEventListener('input', () => {
+        const idx = parseInt(input.dataset.idx);
+        const field = input.dataset.field;
+        const val = input.value;
+        if (taskManagerDraft[idx]) {
+          taskManagerDraft[idx][field] = val;
+          // 色だけプレビュー更新
+          if (field === 'color') {
+            input.parentElement.style.background = val;
+          }
+        }
+      });
+    });
+    list.querySelectorAll('.task-manager-delete').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.idx);
+        if (taskManagerDraft[idx]) {
+          if (!confirm(`「${taskManagerDraft[idx].emoji} ${taskManagerDraft[idx].name}」を削除しますか？\n（既存の予定/実績で使われていれば、そのスロットも保存時に削除されます）`)) return;
+          taskManagerDraft.splice(idx, 1);
+          renderTaskManagerList();
+        }
+      });
+    });
+  }
+  document.getElementById('scheduleTasksManageBtn').addEventListener('click', openTaskManagerModal);
+  document.getElementById('addNewTaskBtn').addEventListener('click', () => {
+    if (!taskManagerDraft) taskManagerDraft = [];
+    // ランダム色を割り当て
+    const palette = ['#ff6b9d', '#4ecdc4', '#ffd93d', '#8a8db5', '#ff9f6b', '#a3d977', '#7eb5e3', '#e3a3d4'];
+    const usedColors = new Set(taskManagerDraft.map(t => t.color));
+    const newColor = palette.find(c => !usedColors.has(c)) || palette[Math.floor(Math.random() * palette.length)];
+    taskManagerDraft.push({
+      id: 'st_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      name: '新しいタスク',
+      emoji: '✨',
+      color: newColor
+    });
+    renderTaskManagerList();
+    // 新規行の名前にフォーカス
+    setTimeout(() => {
+      const inputs = document.querySelectorAll('.task-manager-name-input');
+      const last = inputs[inputs.length - 1];
+      if (last) { last.focus(); last.select(); }
+    }, 50);
+  });
+  document.getElementById('saveTaskManagerBtn').addEventListener('click', async () => {
+    if (!taskManagerDraft) { closeTaskManagerModal(); return; }
+    // バリデーション
+    for (const t of taskManagerDraft) {
+      if (!t.emoji || !t.emoji.trim()) { alert('絵文字を入力してください'); return; }
+      if (!t.name || !t.name.trim()) { alert('タスク名を入力してください'); return; }
+    }
+    // 削除されたタスクIDのSetを作る
+    const oldIds = new Set((scheduleTasks[scheduleModalChannel] || []).map(t => t.id));
+    const newIds = new Set(taskManagerDraft.map(t => t.id));
+    const deletedIds = [...oldIds].filter(id => !newIds.has(id));
+    // 反映
+    scheduleTasks[scheduleModalChannel] = JSON.parse(JSON.stringify(taskManagerDraft));
+    // 削除されたタスクを使うスロットも削除（同チャンネルの全日付）
+    if (deletedIds.length > 0) {
+      const days = scheduleData[scheduleModalChannel] || {};
+      Object.keys(days).forEach(dateStr => {
+        const d = days[dateStr];
+        if (!d) return;
+        if (Array.isArray(d.planned)) d.planned = d.planned.filter(s => !deletedIds.includes(s.taskId));
+        if (Array.isArray(d.actual)) d.actual = d.actual.filter(s => !deletedIds.includes(s.taskId));
+      });
+      cleanupEmptyScheduleDay();
+    }
+    saveCache();
+    closeTaskManagerModal();
+    renderScheduleAll();
+    await saveToFirestore();
+  });
+  document.getElementById('closeTaskManagerBtn').addEventListener('click', () => {
+    if (taskManagerDraft) {
+      if (!confirm('変更を破棄してもよろしいですか？')) return;
+    }
+    closeTaskManagerModal();
+  });
+  document.getElementById('taskManagerModal').addEventListener('click', (e) => {
+    if (e.target.id === 'taskManagerModal') {
+      if (taskManagerDraft) {
+        if (!confirm('変更を破棄してもよろしいですか？')) return;
+      }
+      closeTaskManagerModal();
+    }
+  });
+
   // ===== 日付ポップオーバー =====
   function showDayPopover(cell, dateStr) {
     const popover = document.getElementById('dayPopover');
@@ -4974,6 +6156,17 @@
     
     document.getElementById('popoverHeader').innerHTML = 
       `📅 ${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${dayName}）${holiday ? ` <span style="color:#d84a4a;">[${holiday}]</span>` : ''}`;
+    
+    // 「タイムスケジュールを開く」ボタン
+    const openScheduleBtn = document.getElementById('popoverOpenScheduleBtn');
+    // 古いリスナーをクローンで除去
+    const newBtn = openScheduleBtn.cloneNode(true);
+    openScheduleBtn.parentNode.replaceChild(newBtn, openScheduleBtn);
+    newBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hideDayPopover();
+      openScheduleModal(dateStr);
+    });
     
     // アイコンボタン（絵文字のみ表示）
     const iconsDiv = document.getElementById('popoverIcons');
