@@ -988,35 +988,39 @@
     display: none;
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: 12px;
   }
   .schedule-modal-overlay.show { display: flex; }
   .schedule-modal {
     background: var(--card-bg);
     border: 3px solid var(--card-border);
-    border-radius: 24px;
-    padding: 24px;
+    border-radius: 20px;
+    padding: 16px 20px;
     width: 100%;
-    max-width: 920px;
-    max-height: 92vh;
-    overflow-y: auto;
+    max-width: 1400px;
+    height: calc(100vh - 24px);
+    max-height: calc(100vh - 24px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
     box-shadow: 8px 8px 0 var(--shadow);
   }
   .schedule-modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 16px;
+    margin-bottom: 10px;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 10px;
+    flex-shrink: 0;
   }
   .schedule-modal-title {
-    font-size: 22px;
+    font-size: 20px;
     font-weight: 900;
     color: var(--text);
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
   }
   .schedule-channel-tabs {
     display: flex;
@@ -1026,7 +1030,7 @@
     background: var(--card-bg);
     border: 2.5px solid var(--card-border);
     border-radius: 14px;
-    padding: 8px 18px;
+    padding: 7px 16px;
     font-family: 'M PLUS Rounded 1c', sans-serif;
     font-size: 13px;
     font-weight: 800;
@@ -1045,56 +1049,79 @@
   }
   .schedule-modal-body {
     display: grid;
-    grid-template-columns: minmax(280px, 1fr) 1fr;
-    gap: 20px;
+    grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
+    gap: 16px;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
   }
-  @media (max-width: 760px) {
-    .schedule-modal-body { grid-template-columns: 1fr; }
+  @media (max-width: 860px) {
+    .schedule-modal-body { 
+      grid-template-columns: 1fr;
+      overflow-y: auto;
+    }
+    .schedule-modal { 
+      height: 100vh; 
+      max-height: 100vh; 
+      border-radius: 0;
+    }
   }
   .schedule-chart-wrap {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    min-height: 0;
+    overflow: hidden;
   }
   .schedule-chart-svg {
     width: 100%;
-    max-width: 320px;
+    height: 100%;
+    max-width: min(78vh, 780px);
+    max-height: min(78vh, 780px);
     aspect-ratio: 1;
     display: block;
+    flex-shrink: 1;
+    cursor: crosshair;
+    user-select: none;
+    touch-action: none;
   }
+  .schedule-chart-svg.task-selected { cursor: cell; }
   .schedule-chart-legend {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: 12px;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    font-size: 11px;
     font-weight: 700;
     color: var(--text-muted);
     width: 100%;
-    max-width: 320px;
+    justify-content: center;
+    flex-shrink: 0;
   }
   .schedule-chart-legend-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 3px 6px;
+    gap: 6px;
   }
   .schedule-chart-legend-swatch {
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
     border: 1.5px solid var(--card-border);
     flex-shrink: 0;
   }
   .schedule-chart-legend-swatch.ring {
     background: transparent !important;
-    border-width: 4px;
+    border-width: 3px;
   }
   .schedule-side {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 10px;
     min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 4px;
   }
   .schedule-mode-switch {
     display: flex;
@@ -1220,16 +1247,46 @@
     color: var(--text-muted);
     font-weight: 700;
   }
-  .schedule-slot-time-input {
-    font-family: monospace;
-    font-size: 11px;
-    padding: 2px 4px;
-    border: 1.5px solid var(--card-border);
-    border-radius: 5px;
+  /* 時:分の二分割入力 */
+  .schedule-slot-time-pair {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
     background: var(--card-bg);
-    color: var(--text);
-    width: 56px;
+    border: 1.5px solid var(--card-border);
+    border-radius: 6px;
+    padding: 1px 2px;
+    font-family: monospace;
     font-weight: 700;
+  }
+  .schedule-slot-time-num {
+    width: 22px;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-family: monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text);
+    text-align: center;
+    padding: 2px 0;
+    -moz-appearance: textfield;
+    cursor: ns-resize;
+  }
+  .schedule-slot-time-num::-webkit-outer-spin-button,
+  .schedule-slot-time-num::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .schedule-slot-time-num:focus,
+  .schedule-slot-time-num:hover {
+    background: var(--input-focus-bg);
+    border-radius: 3px;
+  }
+  .schedule-slot-time-colon {
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 800;
   }
   .schedule-slot-delete {
     background: transparent;
@@ -1281,6 +1338,59 @@
   .schedule-copy-btn:hover {
     transform: translate(-1px, -1px);
     box-shadow: 3px 3px 0 var(--shadow);
+  }
+
+  /* ドラッグ後のタスク選択ポップアップ */
+  .schedule-drag-picker {
+    position: fixed;
+    background: var(--card-bg);
+    border: 3px solid var(--card-border);
+    border-radius: 16px;
+    box-shadow: 6px 6px 0 var(--shadow);
+    padding: 12px;
+    z-index: 200;
+    min-width: 220px;
+    max-width: 300px;
+    display: none;
+  }
+  .schedule-drag-picker.show { display: block; }
+  .schedule-drag-picker-header {
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 2px dashed var(--section-dashed);
+  }
+  .schedule-drag-picker-range {
+    color: var(--text);
+    font-family: monospace;
+    font-size: 13px;
+  }
+  .schedule-drag-picker-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .schedule-drag-picker-grid .schedule-task-chip {
+    flex: 0 1 auto;
+  }
+  .schedule-drag-picker-cancel {
+    width: 100%;
+    background: var(--accent-light-pink);
+    border: 2px solid var(--card-border);
+    border-radius: 8px;
+    padding: 5px;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    color: var(--text);
+  }
+  .schedule-drag-picker-cancel:hover {
+    background: var(--danger);
+    color: #fff;
   }
 
   /* タスク管理モーダル */
@@ -3074,14 +3184,19 @@
     </div>
     <div class="schedule-modal-body">
       <div class="schedule-chart-wrap">
-        <svg class="schedule-chart-svg" id="scheduleChartSvg" viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg"></svg>
+        <svg class="schedule-chart-svg" id="scheduleChartSvg" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg"></svg>
         <div class="schedule-chart-legend">
           <div class="schedule-chart-legend-item">
             <span class="schedule-chart-legend-swatch ring" style="border-color: var(--text-muted); border-style: dashed;"></span>
             <span>内側：予定 / 外側：実績</span>
           </div>
-          <div style="font-size: 10px; color: var(--text-faint); padding: 0 6px; font-weight: 700;">
-            💡 真上が0:00、時計回りに24時間
+          <div class="schedule-chart-legend-item">
+            <span style="font-size: 14px;">🖱️</span>
+            <span>グラフ上をドラッグで時間帯追加（5分単位）</span>
+          </div>
+          <div class="schedule-chart-legend-item">
+            <span style="font-size: 14px;">⏰</span>
+            <span>真上が0:00、時計回り24時間</span>
           </div>
         </div>
       </div>
@@ -3107,6 +3222,14 @@
         </div>
       </div>
     </div>
+  </div>
+  <!-- ドラッグ完了後のタスク選択ポップアップ -->
+  <div class="schedule-drag-picker" id="scheduleDragPicker">
+    <div class="schedule-drag-picker-header">
+      ⏰ <span class="schedule-drag-picker-range" id="scheduleDragPickerRange">—</span> に適用するタスクを選択
+    </div>
+    <div class="schedule-drag-picker-grid" id="scheduleDragPickerGrid"></div>
+    <button class="schedule-drag-picker-cancel" id="scheduleDragPickerCancel">キャンセル</button>
   </div>
 </div>
 
@@ -5679,10 +5802,12 @@
       b.classList.toggle('active', b.dataset.mode === scheduleEditMode);
     });
     renderScheduleAll();
+    attachScheduleChartInteraction();
     document.getElementById('scheduleModal').classList.add('show');
   }
   function closeScheduleModal() {
     document.getElementById('scheduleModal').classList.remove('show');
+    hideDragPicker();
     // カレンダー再描画（ミニドーナツ更新）
     renderCalendar();
   }
@@ -5693,86 +5818,336 @@
     renderScheduleSlotList();
   }
 
-  // メインの大きい円グラフ（220x220）
+  // =========================================
+  // ===== ドラッグでスロット追加 =====
+  // =========================================
+  // SVG座標 (x,y) を「分」に変換（中心からの角度を計算）
+  function svgPointToMinutes(svg, clientX, clientY) {
+    const pt = svg.createSVGPoint();
+    pt.x = clientX; pt.y = clientY;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return null;
+    const inv = ctm.inverse();
+    const p = pt.matrixTransform(inv);
+    const dx = p.x - CHART_CX;
+    const dy = p.y - CHART_CY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    // 中心付近すぎたら無効
+    if (dist < 30) return { minutes: null, dist };
+    // 真上=0度=0分。atan2は通常右が0なので変換
+    // atan2(y, x): 右=0, 下=π/2, 左=π, 上=-π/2
+    // 真上(=0分)を起点に時計回りでマッピング
+    let angleRad = Math.atan2(dy, dx); // -π..π
+    let angleDeg = angleRad * 180 / Math.PI;
+    // 真上=0度にしたい → 元の-90度を加える（時計回り）
+    let normalized = angleDeg + 90;
+    if (normalized < 0) normalized += 360;
+    // 0..360度 → 0..1440分
+    const minutes = normalized / 360 * 1440;
+    return { minutes, dist };
+  }
+
+  // 5分単位スナップ
+  function snapTo5(minutes) {
+    return Math.round(minutes / 5) * 5;
+  }
+
+  let scheduleDragState = null;
+  // attach only once per modal open（前のリスナーをクローン削除）
+  function attachScheduleChartInteraction() {
+    const oldSvg = document.getElementById('scheduleChartSvg');
+    if (!oldSvg) return;
+    const svg = oldSvg.cloneNode(false);
+    while (oldSvg.firstChild) svg.appendChild(oldSvg.firstChild);
+    oldSvg.parentNode.replaceChild(svg, oldSvg);
+
+    svg.addEventListener('mousedown', onScheduleChartDown);
+    svg.addEventListener('touchstart', onScheduleChartDown, { passive: false });
+  }
+  function onScheduleChartDown(e) {
+    const svg = document.getElementById('scheduleChartSvg');
+    if (!svg) return;
+    const tasks = scheduleTasks[scheduleModalChannel] || [];
+    if (tasks.length === 0) {
+      alert('まず「⚙️ タスク管理」でタスクを追加してください');
+      return;
+    }
+    e.preventDefault();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const r = svgPointToMinutes(svg, clientX, clientY);
+    if (!r || r.minutes === null) return;
+    // ドラッグ開始（5分スナップ）
+    scheduleDragState = {
+      startMinutes: snapTo5(r.minutes),
+      currentMinutes: snapTo5(r.minutes),
+      moved: false
+    };
+    updateDragPreview();
+    
+    const onMove = (ev) => {
+      const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
+      const cy = ev.touches ? ev.touches[0].clientY : ev.clientY;
+      const rr = svgPointToMinutes(svg, cx, cy);
+      if (!rr || rr.minutes === null) return;
+      const newMin = snapTo5(rr.minutes);
+      if (newMin !== scheduleDragState.currentMinutes) {
+        scheduleDragState.currentMinutes = newMin;
+        scheduleDragState.moved = true;
+        updateDragPreview();
+      }
+    };
+    const onUp = (ev) => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onUp);
+      finishDrag(ev);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onUp);
+  }
+
+  // ドラッグ中のプレビュー（半透明の弧を描く）
+  function updateDragPreview() {
+    if (!scheduleDragState) return;
+    const preview = document.getElementById('scheduleChartDragPreview');
+    if (!preview) return;
+    preview.innerHTML = '';
+    const svgNS = 'http://www.w3.org/2000/svg';
+    let s = Math.min(scheduleDragState.startMinutes, scheduleDragState.currentMinutes);
+    let e = Math.max(scheduleDragState.startMinutes, scheduleDragState.currentMinutes);
+    if (e === s) e = Math.min(1440, s + 5);
+    // 編集モードに応じてリングを選択
+    const rIn  = scheduleEditMode === 'planned' ? CHART_R_PLAN_IN : CHART_R_ACT_IN;
+    const rOut = scheduleEditMode === 'planned' ? CHART_R_PLAN_OUT : CHART_R_ACT_OUT;
+    const path = document.createElementNS(svgNS, 'path');
+    path.setAttribute('d', ringArcPath(CHART_CX, CHART_CY, rIn, rOut, s, e));
+    path.setAttribute('fill', scheduleEditMode === 'planned' ? '#ff6b9d' : '#4ecdc4');
+    path.setAttribute('opacity', '0.45');
+    path.style.stroke = scheduleEditMode === 'planned' ? '#ff6b9d' : '#4ecdc4';
+    path.setAttribute('stroke-width', '3');
+    path.setAttribute('stroke-dasharray', '8 4');
+    preview.appendChild(path);
+    // 範囲テキスト
+    const midAngle = minutesToAngle((s + e) / 2);
+    const labelPos = polar(CHART_CX, CHART_CY, (rIn + rOut) / 2, midAngle);
+    const text = document.createElementNS(svgNS, 'text');
+    text.setAttribute('x', labelPos.x);
+    text.setAttribute('y', labelPos.y);
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('dominant-baseline', 'central');
+    text.setAttribute('font-size', '18');
+    text.setAttribute('font-weight', '900');
+    text.style.fill = '#1a1a1a';
+    text.style.stroke = '#fff';
+    text.style.strokeWidth = '2.5';
+    text.style.paintOrder = 'stroke';
+    text.setAttribute('font-family', "'M PLUS Rounded 1c', sans-serif");
+    text.textContent = `${minutesToHHMM(s)}〜${minutesToHHMM(e)}`;
+    preview.appendChild(text);
+  }
+
+  function finishDrag(ev) {
+    if (!scheduleDragState) return;
+    const startMin = Math.min(scheduleDragState.startMinutes, scheduleDragState.currentMinutes);
+    const endMin = Math.max(scheduleDragState.startMinutes, scheduleDragState.currentMinutes);
+    const moved = scheduleDragState.moved;
+    scheduleDragState = null;
+    
+    // 動いてない、または5分未満 → キャンセル
+    if (!moved || endMin - startMin < 5) {
+      const preview = document.getElementById('scheduleChartDragPreview');
+      if (preview) preview.innerHTML = '';
+      return;
+    }
+    
+    // タスク選択ポップアップを開く
+    showDragPicker(startMin, endMin, ev);
+  }
+
+  function showDragPicker(startMin, endMin, ev) {
+    const picker = document.getElementById('scheduleDragPicker');
+    document.getElementById('scheduleDragPickerRange').textContent = 
+      `${minutesToHHMM(startMin)}〜${minutesToHHMM(endMin)}`;
+    const grid = document.getElementById('scheduleDragPickerGrid');
+    grid.innerHTML = '';
+    const tasks = scheduleTasks[scheduleModalChannel] || [];
+    tasks.forEach(task => {
+      const chip = document.createElement('button');
+      chip.className = 'schedule-task-chip';
+      chip.innerHTML = `<span class="schedule-task-chip-color" style="background: ${task.color};"></span><span>${task.emoji} ${escapeHtml(task.name)}</span>`;
+      chip.addEventListener('click', () => {
+        applyDragRange(startMin, endMin, task.id);
+        hideDragPicker();
+      });
+      grid.appendChild(chip);
+    });
+    // 位置：マウスカーソルの近くに
+    const clientX = (ev && (ev.changedTouches ? ev.changedTouches[0].clientX : ev.clientX)) || window.innerWidth / 2;
+    const clientY = (ev && (ev.changedTouches ? ev.changedTouches[0].clientY : ev.clientY)) || window.innerHeight / 2;
+    picker.style.display = 'block'; // サイズ取得のため一旦表示
+    const pickerW = picker.offsetWidth;
+    const pickerH = picker.offsetHeight;
+    let left = clientX + 10;
+    let top = clientY + 10;
+    if (left + pickerW > window.innerWidth - 10) left = window.innerWidth - pickerW - 10;
+    if (top + pickerH > window.innerHeight - 10) top = clientY - pickerH - 10;
+    if (top < 10) top = 10;
+    picker.style.left = left + 'px';
+    picker.style.top = top + 'px';
+    picker.classList.add('show');
+  }
+
+  function hideDragPicker() {
+    const picker = document.getElementById('scheduleDragPicker');
+    if (picker) picker.classList.remove('show');
+    const preview = document.getElementById('scheduleChartDragPreview');
+    if (preview) preview.innerHTML = '';
+  }
+
+  // 既存スロットとの重なりを上書きしながら、新しいスロットを追加
+  function applyDragRange(startMin, endMin, taskId) {
+    const day = ensureScheduleDay();
+    const slots = day[scheduleEditMode];
+    // 1. 既存スロットを「新範囲と重ならない部分」だけに切り詰める
+    const newSlots = [];
+    for (const slot of slots) {
+      const s = slot.start || 0;
+      const e = slot.end || 0;
+      // 完全に新範囲の外側 → そのまま残す
+      if (e <= startMin || s >= endMin) {
+        newSlots.push(slot);
+        continue;
+      }
+      // 完全に新範囲に含まれる → 削除（残さない）
+      if (s >= startMin && e <= endMin) {
+        continue;
+      }
+      // 部分的に重なる → 左右の残り部分を残す
+      // 左側の残り
+      if (s < startMin) {
+        newSlots.push({
+          ...slot,
+          id: 'sl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+          end: startMin
+        });
+      }
+      // 右側の残り
+      if (e > endMin) {
+        newSlots.push({
+          ...slot,
+          id: 'sl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+          start: endMin
+        });
+      }
+    }
+    // 2. 新しいスロットを追加
+    newSlots.push({
+      id: 'sl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      taskId,
+      start: startMin,
+      end: endMin
+    });
+    day[scheduleEditMode] = newSlots;
+    persistScheduleAndRender();
+  }
+
+  // ===== メインの大きい円グラフ =====
+  // viewBox 800x800 → cx=cy=400、半径レイアウトもそれに合わせる
+  // 内側（予定）: r 140〜260
+  // 外側（実績）: r 280〜380
+  // 時刻目盛り: r 385〜398、ラベルは r 415
+  const CHART_VB = 800;
+  const CHART_CX = 400, CHART_CY = 400;
+  const CHART_R_PLAN_IN  = 140;
+  const CHART_R_PLAN_OUT = 260;
+  const CHART_R_ACT_IN   = 280;
+  const CHART_R_ACT_OUT  = 380;
+
   function renderScheduleChart() {
     const svg = document.getElementById('scheduleChartSvg');
     svg.innerHTML = '';
-    const cx = 110, cy = 110;
+    const cx = CHART_CX, cy = CHART_CY;
     const day = scheduleData[scheduleModalChannel]?.[scheduleModalDate] || { planned: [], actual: [] };
     const tasks = scheduleTasks[scheduleModalChannel] || [];
     const taskMap = new Map(tasks.map(t => [t.id, t]));
     const svgNS = 'http://www.w3.org/2000/svg';
 
-    // 背景（薄い円）
+    // 背景円（外側目盛りまで）
     const bg = document.createElementNS(svgNS, 'circle');
     bg.setAttribute('cx', cx); bg.setAttribute('cy', cy);
-    bg.setAttribute('r', 95);
+    bg.setAttribute('r', 388);
     bg.style.fill = 'var(--dim-bg)';
     bg.style.stroke = 'var(--section-dashed)';
-    bg.setAttribute('stroke-width', '0.6');
+    bg.setAttribute('stroke-width', '1');
     svg.appendChild(bg);
 
-    // 時刻目盛り：3時間ごと（0, 3, 6, 9, 12, 15, 18, 21）
-    for (let h = 0; h < 24; h += 3) {
-      const minutes = h * 60;
-      const angle = minutesToAngle(minutes);
-      const pInner = polar(cx, cy, 96, angle);
-      const pOuter = polar(cx, cy, 102, angle);
-      const tick = document.createElementNS(svgNS, 'line');
-      tick.setAttribute('x1', pInner.x); tick.setAttribute('y1', pInner.y);
-      tick.setAttribute('x2', pOuter.x); tick.setAttribute('y2', pOuter.y);
-      tick.style.stroke = 'var(--text-faint)';
-      tick.setAttribute('stroke-width', '1.2');
-      svg.appendChild(tick);
-      // 時刻ラベル
-      const labelPos = polar(cx, cy, 108, angle);
-      const label = document.createElementNS(svgNS, 'text');
-      label.setAttribute('x', labelPos.x);
-      label.setAttribute('y', labelPos.y);
-      label.setAttribute('text-anchor', 'middle');
-      label.setAttribute('dominant-baseline', 'central');
-      label.setAttribute('font-size', '9');
-      label.setAttribute('font-weight', '700');
-      label.style.fill = 'var(--text-muted)';
-      label.setAttribute('font-family', "'M PLUS Rounded 1c', sans-serif");
-      label.textContent = String(h);
-      svg.appendChild(label);
-    }
-    // 1時間ごとの薄い目盛り
+    // 予定エリアと実績エリアの境界を示す薄い円
+    [CHART_R_PLAN_IN, CHART_R_PLAN_OUT, CHART_R_ACT_IN, CHART_R_ACT_OUT].forEach((r, i) => {
+      const ring = document.createElementNS(svgNS, 'circle');
+      ring.setAttribute('cx', cx); ring.setAttribute('cy', cy);
+      ring.setAttribute('r', r);
+      ring.setAttribute('fill', 'none');
+      ring.style.stroke = 'var(--section-dashed)';
+      ring.setAttribute('stroke-width', '0.8');
+      ring.setAttribute('stroke-dasharray', '3 3');
+      svg.appendChild(ring);
+    });
+
+    // 時刻目盛り（3時間ごと太く、1時間ごと細く）
     for (let h = 0; h < 24; h++) {
-      if (h % 3 === 0) continue;
       const angle = minutesToAngle(h * 60);
-      const pInner = polar(cx, cy, 98, angle);
-      const pOuter = polar(cx, cy, 101, angle);
+      const isMajor = (h % 3 === 0);
+      const tickInner = isMajor ? 386 : 390;
+      const tickOuter = isMajor ? 402 : 398;
+      const pIn = polar(cx, cy, tickInner, angle);
+      const pOut = polar(cx, cy, tickOuter, angle);
       const tick = document.createElementNS(svgNS, 'line');
-      tick.setAttribute('x1', pInner.x); tick.setAttribute('y1', pInner.y);
-      tick.setAttribute('x2', pOuter.x); tick.setAttribute('y2', pOuter.y);
+      tick.setAttribute('x1', pIn.x); tick.setAttribute('y1', pIn.y);
+      tick.setAttribute('x2', pOut.x); tick.setAttribute('y2', pOut.y);
       tick.style.stroke = 'var(--text-faint)';
-      tick.setAttribute('stroke-width', '0.5');
+      tick.setAttribute('stroke-width', isMajor ? '2.5' : '1');
       svg.appendChild(tick);
+      if (isMajor) {
+        const labelPos = polar(cx, cy, 418, angle);
+        const label = document.createElementNS(svgNS, 'text');
+        label.setAttribute('x', labelPos.x);
+        label.setAttribute('y', labelPos.y);
+        label.setAttribute('text-anchor', 'middle');
+        label.setAttribute('dominant-baseline', 'central');
+        label.setAttribute('font-size', '24');
+        label.setAttribute('font-weight', '800');
+        label.style.fill = 'var(--text-muted)';
+        label.setAttribute('font-family', "'M PLUS Rounded 1c', sans-serif");
+        label.textContent = String(h);
+        svg.appendChild(label);
+      }
     }
 
-    // 内側：予定（半径 35〜60）
-    drawDonutArcsInteractive(svg, cx, cy, 35, 60, day.planned || [], taskMap, 0.6, 'planned');
-    // 外側：実績（半径 65〜92）
-    drawDonutArcsInteractive(svg, cx, cy, 65, 92, day.actual || [], taskMap, 1.0, 'actual');
+    // 内側：予定
+    drawDonutArcsInteractive(svg, cx, cy, CHART_R_PLAN_IN, CHART_R_PLAN_OUT, day.planned || [], taskMap, 0.65, 'planned');
+    // 外側：実績
+    drawDonutArcsInteractive(svg, cx, cy, CHART_R_ACT_IN, CHART_R_ACT_OUT, day.actual || [], taskMap, 1.0, 'actual');
 
-    // 中央ラベル
+    // 中央テキスト
     const centerText = document.createElementNS(svgNS, 'text');
     centerText.setAttribute('x', cx);
-    centerText.setAttribute('y', cy - 6);
+    centerText.setAttribute('y', cy - 16);
     centerText.setAttribute('text-anchor', 'middle');
-    centerText.setAttribute('font-size', '10');
-    centerText.setAttribute('font-weight', '800');
+    centerText.setAttribute('font-size', '30');
+    centerText.setAttribute('font-weight', '900');
     centerText.style.fill = 'var(--text-muted)';
     centerText.setAttribute('font-family', "'M PLUS Rounded 1c', sans-serif");
     centerText.textContent = scheduleModalChannel === 'ch1' ? '🌙 コピプラ' : '🍁 和音';
     svg.appendChild(centerText);
     const centerText2 = document.createElementNS(svgNS, 'text');
     centerText2.setAttribute('x', cx);
-    centerText2.setAttribute('y', cy + 8);
+    centerText2.setAttribute('y', cy + 20);
     centerText2.setAttribute('text-anchor', 'middle');
-    centerText2.setAttribute('font-size', '8');
+    centerText2.setAttribute('font-size', '18');
     centerText2.setAttribute('font-weight', '700');
     centerText2.style.fill = 'var(--text-faint)';
     centerText2.setAttribute('font-family', "'M PLUS Rounded 1c', sans-serif");
@@ -5780,9 +6155,26 @@
     const actualCount = (day.actual || []).length;
     centerText2.textContent = `予定${plannedCount} / 実績${actualCount}`;
     svg.appendChild(centerText2);
+    // 現在のモード表示（編集モードのリングを強調）
+    const modeText = document.createElementNS(svgNS, 'text');
+    modeText.setAttribute('x', cx);
+    modeText.setAttribute('y', cy + 48);
+    modeText.setAttribute('text-anchor', 'middle');
+    modeText.setAttribute('font-size', '16');
+    modeText.setAttribute('font-weight', '800');
+    modeText.style.fill = scheduleEditMode === 'planned' ? 'var(--accent-pink)' : 'var(--accent-teal)';
+    modeText.setAttribute('font-family', "'M PLUS Rounded 1c', sans-serif");
+    modeText.textContent = scheduleEditMode === 'planned' ? '✏️ 編集中: 予定' : '✏️ 編集中: 実績';
+    svg.appendChild(modeText);
+
+    // ドラッグ中のプレビュー用グループ（後でJSが追加・削除する）
+    const dragPreview = document.createElementNS(svgNS, 'g');
+    dragPreview.setAttribute('id', 'scheduleChartDragPreview');
+    dragPreview.style.pointerEvents = 'none';
+    svg.appendChild(dragPreview);
   }
 
-  // インタラクティブな弧描画（クリックでハイライト等は今のところなし、tooltipのみ）
+  // 弧の描画＋ラベル
   function drawDonutArcsInteractive(svg, cx, cy, rIn, rOut, slots, taskMap, opacity, mode) {
     const svgNS = 'http://www.w3.org/2000/svg';
     slots.forEach(slot => {
@@ -5797,7 +6189,7 @@
         path.setAttribute('fill', task.color || '#888');
         path.setAttribute('opacity', opacity);
         path.style.stroke = 'var(--card-bg)';
-        path.setAttribute('stroke-width', '0.5');
+        path.setAttribute('stroke-width', '1.5');
         const title = document.createElementNS(svgNS, 'title');
         title.textContent = `${mode === 'planned' ? '予定' : '実績'}: ${task.emoji} ${task.name} (${minutesToHHMM(s)}〜${minutesToHHMM(e)})`;
         path.appendChild(title);
@@ -5806,10 +6198,89 @@
       if (e - s >= 1440 - 0.1) {
         draw(s, s + 720);
         draw(s + 720, e);
+        drawArcLabel(svg, cx, cy, rIn, rOut, s, s + 720, task, mode);
+        drawArcLabel(svg, cx, cy, rIn, rOut, s + 720, e, task, mode);
       } else {
         draw(s, e);
+        drawArcLabel(svg, cx, cy, rIn, rOut, s, e, task, mode);
       }
     });
+  }
+
+  // 弧の中央に絵文字＋テキストを配置
+  // 弧の長さに応じて表示内容を調整：
+  //  - 大きい(>120分): 絵文字 + 名前
+  //  - 中(60-120分): 絵文字のみ
+  //  - 小(20-60分): 絵文字のみ（小さく）
+  //  - 極小(<20分): 表示なし
+  function drawArcLabel(svg, cx, cy, rIn, rOut, startMin, endMin, task, mode) {
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const durationMin = endMin - startMin;
+    if (durationMin < 20) return;
+    const midMin = (startMin + endMin) / 2;
+    const midAngle = minutesToAngle(midMin);
+    const rMid = (rIn + rOut) / 2;
+    const center = polar(cx, cy, rMid, midAngle);
+    
+    if (durationMin >= 120) {
+      // 絵文字＋名前
+      const emoji = document.createElementNS(svgNS, 'text');
+      emoji.setAttribute('x', center.x);
+      emoji.setAttribute('y', center.y - 11);
+      emoji.setAttribute('text-anchor', 'middle');
+      emoji.setAttribute('dominant-baseline', 'central');
+      emoji.setAttribute('font-size', '24');
+      emoji.style.pointerEvents = 'none';
+      emoji.textContent = task.emoji;
+      svg.appendChild(emoji);
+      const name = document.createElementNS(svgNS, 'text');
+      name.setAttribute('x', center.x);
+      name.setAttribute('y', center.y + 13);
+      name.setAttribute('text-anchor', 'middle');
+      name.setAttribute('dominant-baseline', 'central');
+      name.setAttribute('font-size', '14');
+      name.setAttribute('font-weight', '800');
+      name.setAttribute('font-family', "'M PLUS Rounded 1c', sans-serif");
+      name.style.fill = getContrastColor(task.color);
+      name.style.pointerEvents = 'none';
+      const maxLen = 6;
+      const display = task.name.length > maxLen ? task.name.slice(0, maxLen) + '…' : task.name;
+      name.textContent = display;
+      svg.appendChild(name);
+    } else if (durationMin >= 60) {
+      const emoji = document.createElementNS(svgNS, 'text');
+      emoji.setAttribute('x', center.x);
+      emoji.setAttribute('y', center.y);
+      emoji.setAttribute('text-anchor', 'middle');
+      emoji.setAttribute('dominant-baseline', 'central');
+      emoji.setAttribute('font-size', '24');
+      emoji.style.pointerEvents = 'none';
+      emoji.textContent = task.emoji;
+      svg.appendChild(emoji);
+    } else {
+      const emoji = document.createElementNS(svgNS, 'text');
+      emoji.setAttribute('x', center.x);
+      emoji.setAttribute('y', center.y);
+      emoji.setAttribute('text-anchor', 'middle');
+      emoji.setAttribute('dominant-baseline', 'central');
+      emoji.setAttribute('font-size', '16');
+      emoji.style.pointerEvents = 'none';
+      emoji.textContent = task.emoji;
+      svg.appendChild(emoji);
+    }
+  }
+
+  // 背景色とのコントラスト確保のため、文字色を自動選択（黒 or 白）
+  function getContrastColor(hex) {
+    if (!hex || typeof hex !== 'string') return '#2d2d2d';
+    const m = hex.replace('#', '').match(/.{1,2}/g);
+    if (!m || m.length < 3) return '#2d2d2d';
+    const r = parseInt(m[0], 16);
+    const g = parseInt(m[1], 16);
+    const b = parseInt(m[2], 16);
+    // YIQ式輝度
+    const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+    return yiq >= 145 ? '#1a1a1a' : '#ffffff';
   }
 
   function renderSchedulePalette() {
@@ -5879,9 +6350,22 @@
       item.className = 'schedule-slot-item';
       const taskColor = task?.color || '#888';
       const taskLabel = task ? `${task.emoji} ${task.name}` : `(削除されたタスク)`;
-      // 開始・終了時刻のinput
-      const startInput = `<input type="text" class="schedule-slot-time-input" data-field="start" data-slot-id="${slot.id}" value="${minutesToHHMM(slot.start || 0)}" maxlength="5" pattern="\\d{1,2}:\\d{2}">`;
-      const endInput = `<input type="text" class="schedule-slot-time-input" data-field="end" data-slot-id="${slot.id}" value="${minutesToHHMM(slot.end || 0)}" maxlength="5" pattern="\\d{1,2}:\\d{2}">`;
+      const sH = Math.floor((slot.start || 0) / 60);
+      const sM = (slot.start || 0) % 60;
+      const eH = Math.floor((slot.end || 0) / 60);
+      const eM = (slot.end || 0) % 60;
+      const startInput = `
+        <span class="schedule-slot-time-pair" title="マウスホイールで時刻を変更">
+          <input type="number" class="schedule-slot-time-num" data-field="startH" data-slot-id="${slot.id}" value="${sH}" min="0" max="24">
+          <span class="schedule-slot-time-colon">:</span>
+          <input type="number" class="schedule-slot-time-num" data-field="startM" data-slot-id="${slot.id}" value="${String(sM).padStart(2, '0')}" min="0" max="55" step="5">
+        </span>`;
+      const endInput = `
+        <span class="schedule-slot-time-pair" title="マウスホイールで時刻を変更">
+          <input type="number" class="schedule-slot-time-num" data-field="endH" data-slot-id="${slot.id}" value="${eH}" min="0" max="24">
+          <span class="schedule-slot-time-colon">:</span>
+          <input type="number" class="schedule-slot-time-num" data-field="endM" data-slot-id="${slot.id}" value="${String(eM).padStart(2, '0')}" min="0" max="55" step="5">
+        </span>`;
       item.innerHTML = `
         <span class="schedule-slot-color-dot" style="background: ${taskColor};"></span>
         <span class="schedule-slot-task-name">${escapeHtml(taskLabel)}</span>
@@ -5892,38 +6376,92 @@
       `;
       list.appendChild(item);
     });
-    // イベント
-    list.querySelectorAll('.schedule-slot-time-input').forEach(input => {
-      input.addEventListener('change', () => {
+    // 時刻入力のイベント
+    list.querySelectorAll('.schedule-slot-time-num').forEach(input => {
+      // 値変更（フォーカス外れたら確定）
+      const applyChange = () => {
         const slotId = input.dataset.slotId;
         const field = input.dataset.field;
-        const val = hhmmToMinutes(input.value.trim());
-        if (val === null) {
-          alert('時刻は HH:MM 形式で入力してください（例：09:30）');
-          // 元の値に戻す
-          const slots2 = getCurrentSlots();
-          const s = slots2.find(x => x.id === slotId);
-          if (s) input.value = minutesToHHMM(s[field] || 0);
-          return;
-        }
         const slots2 = getCurrentSlots();
         const slot = slots2.find(x => x.id === slotId);
         if (!slot) return;
-        const otherField = field === 'start' ? 'end' : 'start';
-        const otherVal = slot[otherField] || 0;
-        if (field === 'start' && val >= otherVal) {
-          alert('開始時刻は終了時刻より前にしてください');
-          input.value = minutesToHHMM(slot.start || 0);
+        let h, m;
+        if (field === 'startH' || field === 'startM') {
+          h = parseInt(input.parentElement.querySelector('[data-field="startH"]').value) || 0;
+          m = parseInt(input.parentElement.querySelector('[data-field="startM"]').value) || 0;
+        } else {
+          h = parseInt(input.parentElement.querySelector('[data-field="endH"]').value) || 0;
+          m = parseInt(input.parentElement.querySelector('[data-field="endM"]').value) || 0;
+        }
+        // 範囲制限
+        h = Math.max(0, Math.min(24, h));
+        m = Math.max(0, Math.min(59, m));
+        // 5分単位スナップ
+        m = Math.round(m / 5) * 5;
+        if (m === 60) { h += 1; m = 0; }
+        if (h === 24 && m > 0) { h = 24; m = 0; }
+        const total = h * 60 + m;
+        const newVal = Math.max(0, Math.min(1440, total));
+        const target = (field === 'startH' || field === 'startM') ? 'start' : 'end';
+        const otherField = target === 'start' ? 'end' : 'start';
+        // バリデーション：startは endより前
+        if (target === 'start' && newVal >= (slot.end || 0)) {
+          // 不正：元の値に戻す
+          renderScheduleSlotList();
           return;
         }
-        if (field === 'end' && val <= otherVal) {
-          alert('終了時刻は開始時刻より後にしてください');
-          input.value = minutesToHHMM(slot.end || 0);
+        if (target === 'end' && newVal <= (slot.start || 0)) {
+          renderScheduleSlotList();
           return;
         }
-        slot[field] = val;
+        slot[target] = newVal;
         persistScheduleAndRender();
-      });
+      };
+      input.addEventListener('change', applyChange);
+      input.addEventListener('blur', applyChange);
+      // ホイールで±（5分単位）
+      input.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const field = input.dataset.field;
+        const slotId = input.dataset.slotId;
+        const slots2 = getCurrentSlots();
+        const slot = slots2.find(x => x.id === slotId);
+        if (!slot) return;
+        const target = (field === 'startH' || field === 'startM') ? 'start' : 'end';
+        const otherField = target === 'start' ? 'end' : 'start';
+        const isHour = (field === 'startH' || field === 'endH');
+        const isMin = (field === 'startM' || field === 'endM');
+        const direction = e.deltaY < 0 ? 1 : -1;
+        const step = isHour ? 60 : 5; // 時:60分単位 / 分:5分単位
+        let cur = slot[target] || 0;
+        let next = cur + direction * step;
+        next = Math.max(0, Math.min(1440, next));
+        // 5分単位スナップ（分側変更時）
+        if (isMin) next = Math.round(next / 5) * 5;
+        // バリデーション：startは endより前、endは startより後
+        if (target === 'start' && next >= (slot.end || 0)) return;
+        if (target === 'end' && next <= (slot.start || 0)) return;
+        slot[target] = next;
+        // 入力欄のみ部分更新（再レンダで他のフォーカスが消えないように）
+        const newH = Math.floor(next / 60);
+        const newM = next % 60;
+        const pair = input.parentElement;
+        pair.querySelector(`[data-field="${target}H"]`).value = String(newH);
+        pair.querySelector(`[data-field="${target}M"]`).value = String(newM).padStart(2, '0');
+        // 軽量再描画：チャートとスロット合計だけ更新
+        renderScheduleChart();
+        cleanupEmptyScheduleDay();
+        // 合計表示更新
+        const slotsAll = getCurrentSlots();
+        const totalMin2 = slotsAll.reduce((sum, s) => sum + Math.max(0, (s.end || 0) - (s.start || 0)), 0);
+        const tH = Math.floor(totalMin2 / 60); const tM = totalMin2 % 60;
+        const totalEl = document.getElementById('scheduleSlotsTotal');
+        if (totalEl) totalEl.textContent = slotsAll.length > 0 ? `（${slotsAll.length}件 / 合計 ${tH}時間${tM > 0 ? tM + '分' : ''}）` : '';
+        // 保存は debounce で実行
+        debouncedSaveSchedule();
+      }, { passive: false });
+      // フォーカス時に全選択
+      input.addEventListener('focus', () => input.select());
     });
     list.querySelectorAll('.schedule-slot-delete').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -5936,6 +6474,16 @@
         }
       });
     });
+  }
+
+  // ホイール連打時の保存頻度を抑える
+  let scheduleSaveDebounceTimer = null;
+  function debouncedSaveSchedule() {
+    clearTimeout(scheduleSaveDebounceTimer);
+    scheduleSaveDebounceTimer = setTimeout(() => {
+      saveCache();
+      saveToFirestore();
+    }, 400);
   }
 
   // データを保存して画面を再描画
@@ -6012,13 +6560,32 @@
   });
   // 閉じる
   document.getElementById('scheduleCloseBtn').addEventListener('click', closeScheduleModal);
+  // ドラッグピッカー
+  document.getElementById('scheduleDragPickerCancel').addEventListener('click', hideDragPicker);
+  // ピッカー外クリックで閉じる
+  document.addEventListener('mousedown', (e) => {
+    const picker = document.getElementById('scheduleDragPicker');
+    if (!picker || !picker.classList.contains('show')) return;
+    if (!picker.contains(e.target)) {
+      // SVG内のクリックなら別の処理（新規ドラッグ）として hide のみで止める
+      hideDragPicker();
+    }
+  });
   // 外側クリックは閉じない（誤クリックで消えると困るので）
   // ただしEscキーで閉じる
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && document.getElementById('scheduleModal').classList.contains('show')) {
-      // タスク管理モーダルが開いていればそちらを優先で閉じる
-      if (document.getElementById('taskManagerModal').classList.contains('show')) return;
-      closeScheduleModal();
+    if (e.key === 'Escape') {
+      // ドラッグピッカーが開いていればそれを先に閉じる
+      const picker = document.getElementById('scheduleDragPicker');
+      if (picker && picker.classList.contains('show')) {
+        hideDragPicker();
+        return;
+      }
+      if (document.getElementById('scheduleModal').classList.contains('show')) {
+        // タスク管理モーダルが開いていればそちらを優先で閉じる
+        if (document.getElementById('taskManagerModal').classList.contains('show')) return;
+        closeScheduleModal();
+      }
     }
   });
 
