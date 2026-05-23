@@ -1335,9 +1335,21 @@
     color: var(--text);
     box-shadow: 2px 2px 0 var(--shadow);
   }
-  .schedule-copy-btn:hover {
+  .schedule-copy-btn:hover:not(:disabled) {
     transform: translate(-1px, -1px);
     box-shadow: 3px 3px 0 var(--shadow);
+  }
+  .schedule-copy-btn:disabled,
+  .small-btn:disabled,
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+  }
+  .schedule-copy-btn:disabled:hover {
+    transform: none;
+    box-shadow: none;
   }
 
   /* ドラッグ後のタスク選択ポップアップ */
@@ -3332,6 +3344,7 @@
           <button class="schedule-channel-tab active" data-ch="ch1">🌙 コピプラ</button>
           <button class="schedule-channel-tab" data-ch="ch2">🍁 和音</button>
         </div>
+        <button class="small-btn" id="scheduleCopyFromDateBtn" title="他の日の予定をコピー">📋 予定をコピー</button>
         <button class="small-btn" id="scheduleTasksManageBtn">⚙️ タスク管理</button>
         <button class="small-btn" id="scheduleCloseBtn" style="background: var(--accent-light-pink);">✕ 閉じる</button>
       </div>
@@ -3370,6 +3383,7 @@
           <div class="schedule-slot-list" id="scheduleSlotList"></div>
           <div class="schedule-add-row">
             <span class="schedule-add-row-label">クイック操作：</span>
+            <button class="schedule-copy-btn" id="scheduleCopyPrevDayBtn" title="前日の予定をそのままコピー">📋 前日の予定をコピー</button>
             <button class="schedule-copy-btn" id="scheduleCopyFromPlanBtn" title="予定をコピーして実績の下書きを作成">📋 予定→実績にコピー</button>
             <button class="schedule-copy-btn" id="scheduleClearBtn" style="background: var(--accent-light-pink);" title="現在のモード（予定/実績）の全スロット削除">🗑 全削除</button>
           </div>
@@ -3405,6 +3419,42 @@
     <div class="btn-row">
       <button class="btn btn-save" id="saveTaskManagerBtn">保存</button>
       <button class="btn btn-ghost" id="closeTaskManagerBtn">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- 予定コピー元選択ダイアログ -->
+<div class="modal-overlay" id="copyFromDateModal">
+  <div class="modal" style="max-width: 480px;">
+    <div class="modal-title"><span>📋</span><span>予定をコピー</span></div>
+    <div class="modal-section">
+      <div class="modal-section-title">📅 コピー先（現在の日）</div>
+      <div class="preview-box" id="copyFromDateTargetLabel" style="color: var(--text);">—</div>
+    </div>
+    <div class="modal-section">
+      <div class="modal-section-title">📥 コピー元の日付を選択</div>
+      <div class="input-group">
+        <label class="input-label">日付</label>
+        <input type="date" id="copyFromDateInput">
+      </div>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px;">
+        <button class="chip" data-quick="-1">1日前</button>
+        <button class="chip" data-quick="-2">2日前</button>
+        <button class="chip" data-quick="-3">3日前</button>
+        <button class="chip" data-quick="-7">先週同曜日</button>
+      </div>
+      <div class="preview-box" id="copyFromDatePreview" style="margin-top: 10px;">コピー元の日付を選択してください</div>
+    </div>
+    <div class="modal-section">
+      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700;">
+        <input type="checkbox" id="copyFromDateOverwriteCheck" style="width: 18px; height: 18px; cursor: pointer;">
+        <span>⚠️ 現在の予定を上書きしてコピー</span>
+      </label>
+      <div class="hint">💡 オフの場合：現在の日に予定があるとコピーできません</div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-save" id="execCopyFromDateBtn" disabled>📋 コピー実行</button>
+      <button class="btn btn-ghost" id="cancelCopyFromDateBtn">キャンセル</button>
     </div>
   </div>
 </div>
@@ -6394,6 +6444,8 @@
     renderScheduleChart();
     renderSchedulePalette();
     renderScheduleSlotList();
+    updateCopyPrevDayBtnState();
+    updateCopyFromDateBtnState();
   }
 
   // =========================================
@@ -7144,6 +7196,193 @@
       b.classList.toggle('active', b.dataset.mode === 'actual'));
     persistScheduleAndRender();
   });
+
+  // ================================================================
+  // ===== 予定コピー機能（前日コピー / 任意の日からコピー） =====
+  // ================================================================
+
+  // 前日のYYYY-MM-DD文字列を返す
+  function getPrevDayStr(dateStr) {
+    const d = new Date(dateStr + 'T12:00:00');
+    d.setDate(d.getDate() - 1);
+    return ymd(d);
+  }
+  // 指定日からN日前のYYYY-MM-DD
+  function getDayOffsetStr(dateStr, offset) {
+    const d = new Date(dateStr + 'T12:00:00');
+    d.setDate(d.getDate() + offset);
+    return ymd(d);
+  }
+  // 指定日のplannedをコピーして現在の日に貼り付け（純粋関数的に置換）
+  function copyPlannedFromDateToCurrent(fromDateStr) {
+    const day = ensureScheduleDay();
+    const src = scheduleData[scheduleModalChannel]?.[fromDateStr];
+    if (!src || !Array.isArray(src.planned) || src.planned.length === 0) return false;
+    day.planned = src.planned.map(s => ({
+      id: 'sl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      taskId: s.taskId,
+      start: s.start,
+      end: s.end
+    }));
+    // モードを予定に切替
+    scheduleEditMode = 'planned';
+    document.querySelectorAll('.schedule-mode-btn').forEach(b => 
+      b.classList.toggle('active', b.dataset.mode === 'planned'));
+    persistScheduleAndRender();
+    return true;
+  }
+
+  // 「前日の予定をコピー」ボタンの状態を更新（モーダル開いた時/モード切替時に呼ぶ）
+  function updateCopyPrevDayBtnState() {
+    const btn = document.getElementById('scheduleCopyPrevDayBtn');
+    if (!btn || !scheduleModalDate) return;
+    const day = scheduleData[scheduleModalChannel]?.[scheduleModalDate];
+    const hasCurrentPlanned = day && Array.isArray(day.planned) && day.planned.length > 0;
+    const prevDateStr = getPrevDayStr(scheduleModalDate);
+    const prev = scheduleData[scheduleModalChannel]?.[prevDateStr];
+    const hasPrevPlanned = prev && Array.isArray(prev.planned) && prev.planned.length > 0;
+    btn.disabled = hasCurrentPlanned || !hasPrevPlanned;
+    if (hasCurrentPlanned) {
+      btn.title = '⚠️ 現在の日に予定があるためコピーできません（「予定をコピー」から上書き可能）';
+    } else if (!hasPrevPlanned) {
+      btn.title = '⚠️ 前日に予定が登録されていません';
+    } else {
+      btn.title = `📋 前日（${prevDateStr}）の予定をコピー`;
+    }
+  }
+  // 「予定をコピー」ボタンの状態を更新
+  function updateCopyFromDateBtnState() {
+    const btn = document.getElementById('scheduleCopyFromDateBtn');
+    if (!btn) return;
+    // ダイアログから上書きできるので、こちらは常に有効
+    btn.disabled = false;
+  }
+
+  // クイック行：前日コピー
+  document.getElementById('scheduleCopyPrevDayBtn').addEventListener('click', () => {
+    if (!scheduleModalDate) return;
+    const day = scheduleData[scheduleModalChannel]?.[scheduleModalDate];
+    if (day && Array.isArray(day.planned) && day.planned.length > 0) {
+      alert('現在の日に予定があるためコピーできません');
+      return;
+    }
+    const prevDateStr = getPrevDayStr(scheduleModalDate);
+    const ok = copyPlannedFromDateToCurrent(prevDateStr);
+    if (!ok) {
+      alert('前日に予定が登録されていません');
+    }
+  });
+
+  // 上部：「予定をコピー」ダイアログを開く
+  document.getElementById('scheduleCopyFromDateBtn').addEventListener('click', () => {
+    openCopyFromDateModal();
+  });
+
+  function openCopyFromDateModal() {
+    if (!scheduleModalDate) return;
+    const modal = document.getElementById('copyFromDateModal');
+    // コピー先表示
+    const d = new Date(scheduleModalDate + 'T12:00:00');
+    const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+    const chLabel = scheduleModalChannel === 'ch1' ? '🌙 コピプラ' : '🍁 和音';
+    document.getElementById('copyFromDateTargetLabel').innerHTML = 
+      `<b>${chLabel}</b><br>${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${dayNames[d.getDay()]}）`;
+    // 上書きチェックボックスをリセット、現状確認
+    const overwriteCheck = document.getElementById('copyFromDateOverwriteCheck');
+    overwriteCheck.checked = false;
+    const day = scheduleData[scheduleModalChannel]?.[scheduleModalDate];
+    const hasCurrentPlanned = day && Array.isArray(day.planned) && day.planned.length > 0;
+    // 日付入力初期値：前日
+    const dateInput = document.getElementById('copyFromDateInput');
+    dateInput.value = getPrevDayStr(scheduleModalDate);
+    dateInput.max = getPrevDayStr(scheduleModalDate); // 当日や未来は選べない
+    // プレビュー更新
+    updateCopyFromDatePreview();
+    modal.classList.add('show');
+  }
+  function closeCopyFromDateModal() {
+    document.getElementById('copyFromDateModal').classList.remove('show');
+  }
+  // 日付入力 / 上書きチェックボックスの変更でプレビュー＆ボタン状態更新
+  function updateCopyFromDatePreview() {
+    const dateInput = document.getElementById('copyFromDateInput');
+    const overwriteCheck = document.getElementById('copyFromDateOverwriteCheck');
+    const preview = document.getElementById('copyFromDatePreview');
+    const execBtn = document.getElementById('execCopyFromDateBtn');
+    const fromDate = dateInput.value;
+    if (!fromDate) {
+      preview.textContent = '⚠️ 日付を選択してください';
+      preview.className = 'preview-box error';
+      execBtn.disabled = true;
+      return;
+    }
+    if (fromDate === scheduleModalDate) {
+      preview.textContent = '⚠️ コピー先と同じ日付は選べません';
+      preview.className = 'preview-box error';
+      execBtn.disabled = true;
+      return;
+    }
+    if (fromDate > scheduleModalDate) {
+      preview.textContent = '⚠️ コピー先より未来の日付は選べません';
+      preview.className = 'preview-box error';
+      execBtn.disabled = true;
+      return;
+    }
+    const src = scheduleData[scheduleModalChannel]?.[fromDate];
+    const srcCount = (src && Array.isArray(src.planned)) ? src.planned.length : 0;
+    if (srcCount === 0) {
+      preview.textContent = `⚠️ ${fromDate} には予定が登録されていません`;
+      preview.className = 'preview-box error';
+      execBtn.disabled = true;
+      return;
+    }
+    // 現在の日に既存予定があるかチェック
+    const day = scheduleData[scheduleModalChannel]?.[scheduleModalDate];
+    const hasCurrentPlanned = day && Array.isArray(day.planned) && day.planned.length > 0;
+    if (hasCurrentPlanned && !overwriteCheck.checked) {
+      preview.innerHTML = `⚠️ 現在の日に既に予定（${day.planned.length}件）があります<br>上書きする場合は「⚠️ 現在の予定を上書きしてコピー」にチェックを入れてください`;
+      preview.className = 'preview-box error';
+      execBtn.disabled = true;
+      return;
+    }
+    // OK
+    const d = new Date(fromDate + 'T12:00:00');
+    const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+    preview.innerHTML = `✅ ${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${dayNames[d.getDay()]}）の予定 <b>${srcCount}件</b> をコピーします`;
+    preview.className = 'preview-box success';
+    execBtn.disabled = false;
+  }
+
+  // イベント登録
+  document.getElementById('copyFromDateInput').addEventListener('change', updateCopyFromDatePreview);
+  document.getElementById('copyFromDateInput').addEventListener('input', updateCopyFromDatePreview);
+  document.getElementById('copyFromDateOverwriteCheck').addEventListener('change', updateCopyFromDatePreview);
+  // ショートカットチップ
+  document.querySelectorAll('#copyFromDateModal .chip[data-quick]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!scheduleModalDate) return;
+      const offset = parseInt(btn.dataset.quick);
+      const target = getDayOffsetStr(scheduleModalDate, offset);
+      document.getElementById('copyFromDateInput').value = target;
+      updateCopyFromDatePreview();
+    });
+  });
+  // 実行ボタン
+  document.getElementById('execCopyFromDateBtn').addEventListener('click', () => {
+    const fromDate = document.getElementById('copyFromDateInput').value;
+    if (!fromDate) return;
+    const ok = copyPlannedFromDateToCurrent(fromDate);
+    if (ok) {
+      closeCopyFromDateModal();
+    } else {
+      alert('コピーに失敗しました（コピー元に予定がありません）');
+    }
+  });
+  document.getElementById('cancelCopyFromDateBtn').addEventListener('click', closeCopyFromDateModal);
+  document.getElementById('copyFromDateModal').addEventListener('click', (e) => {
+    if (e.target.id === 'copyFromDateModal') closeCopyFromDateModal();
+  });
+
   // 全削除
   document.getElementById('scheduleClearBtn').addEventListener('click', () => {
     const modeLabel = scheduleEditMode === 'planned' ? '予定' : '実績';
